@@ -8,19 +8,15 @@ import traceback
 
 app = FastAPI()
 
+# CORS - פתוח לגמרי לצורך בדיקות
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://sing-to-song.lovable.app",
-        "https://singto-song.lovable.app",
-        "https://lovable.dev",
-        "http://localhost:3000",
-        "http://localhost:5173",
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 @app.get("/")
 def home():
     return {"status": "Music backend is running"}
@@ -46,25 +42,42 @@ async def analyze_audio(file: UploadFile = File(...)):
             temp_file.write(await file.read())
             temp_path = temp_file.name
 
-        y, sr = librosa.load(temp_path, sr=22050, mono=True, duration=30)
+        # טעינה חסכונית בזיכרון
+        y, sr = librosa.load(
+            temp_path,
+            sr=22050,
+            mono=True,
+            duration=30
+        )
 
-        tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
+        tempo, beats = librosa.beat.beat_track(
+            y=y,
+            sr=sr
+        )
+
+        duration = librosa.get_duration(
+            y=y,
+            sr=sr
+        )
 
         return {
+            "success": True,
             "bpm": round(float(tempo)),
             "filename": file.filename,
             "sample_rate": sr,
-            "duration_seconds": round(float(librosa.get_duration(y=y, sr=sr)), 2),
+            "duration_seconds": round(float(duration), 2),
             "message": "Audio analyzed successfully"
         }
 
     except Exception as e:
+        print(traceback.format_exc())
+
         return JSONResponse(
             status_code=500,
             content={
+                "success": False,
                 "error": "Audio analysis failed",
-                "details": str(e),
-                "trace": traceback.format_exc()
+                "details": str(e)
             }
         )
 
