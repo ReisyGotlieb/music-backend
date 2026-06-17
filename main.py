@@ -21,6 +21,15 @@ app.add_middleware(
 def home():
     return {"status": "Music backend is running"}
 
+
+@app.get("/test")
+def test():
+    return {
+        "success": True,
+        "message": "API is working"
+    }
+
+
 @app.post("/analyze-audio")
 async def analyze_audio(file: UploadFile = File(...)):
     temp_path = None
