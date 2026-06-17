@@ -16,6 +16,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+
+CHORD_MAP = {
+    "C": ["C", "Am", "F", "G"],
+    "C#": ["C#", "A#m", "F#", "G#"],
+    "D": ["D", "Bm", "G", "A"],
+    "D#": ["D#", "Cm", "G#", "A#"],
+    "E": ["E", "C#m", "A", "B"],
+    "F": ["F", "Dm", "Bb", "C"],
+    "F#": ["F#", "D#m", "B", "C#"],
+    "G": ["G", "Em", "C", "D"],
+    "G#": ["G#", "Fm", "C#", "D#"],
+    "A": ["A", "F#m", "D", "E"],
+    "A#": ["A#", "Gm", "D#", "F"],
+    "B": ["B", "G#m", "E", "F#"],
+}
+
 @app.get("/")
 def home():
     return {"status": "Music backend is running"}
@@ -65,9 +82,21 @@ async def analyze_audio(file: UploadFile = File(...)):
 
         duration = librosa.get_duration(y=y, sr=sr)
 
+        chroma = librosa.feature.chroma_stft(y=y, sr=sr)
+        chroma_mean = chroma.mean(axis=1)
+
+        top_notes_idx = chroma_mean.argsort()[-3:][::-1]
+        top_notes = [NOTE_NAMES[int(i)] for i in top_notes_idx]
+
+        detected_key = top_notes[0]
+        suggested_chords = CHORD_MAP.get(detected_key, [detected_key])
+
         return {
             "success": True,
             "bpm": round(tempo_value),
+            "key": detected_key,
+            "notes": top_notes,
+            "suggested_chords": suggested_chords,
             "filename": file.filename,
             "sample_rate": sr,
             "duration_seconds": round(float(duration), 2),
