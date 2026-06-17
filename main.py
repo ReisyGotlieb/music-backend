@@ -59,24 +59,23 @@ async def analyze_audio(file: UploadFile = File(...)):
             duration=30
         )
 
-        tempo, beats = librosa.beat.beat_track(
-            y=y,
-            sr=sr
-        )
+       tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
 
-        duration = librosa.get_duration(
-            y=y,
-            sr=sr
-        )
+if hasattr(tempo, "__len__"):
+    tempo_value = float(tempo[0])
+else:
+    tempo_value = float(tempo)
 
-        return {
-            "success": True,
-            "bpm": round(float(tempo)),
-            "filename": file.filename,
-            "sample_rate": sr,
-            "duration_seconds": round(float(duration), 2),
-            "message": "Audio analyzed successfully"
-        }
+duration = librosa.get_duration(y=y, sr=sr)
+
+return {
+    "success": True,
+    "bpm": round(tempo_value),
+    "filename": file.filename,
+    "sample_rate": sr,
+    "duration_seconds": round(float(duration), 2),
+    "message": "Audio analyzed successfully"
+}
 
     except Exception as e:
         print(traceback.format_exc())
