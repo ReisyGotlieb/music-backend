@@ -46,7 +46,7 @@ async def analyze_audio(file: UploadFile = File(...)):
             temp_file.write(await file.read())
             temp_path = temp_file.name
 
-        y, sr = librosa.load(temp_path, sr=None, mono=True)
+        y, sr = librosa.load(temp_path, sr=22050, mono=True, duration=30)
 
         tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
 
