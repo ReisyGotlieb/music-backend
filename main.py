@@ -1,8 +1,10 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import librosa
 import tempfile
 import os
+import traceback
 
 app = FastAPI()
 
@@ -25,18 +27,47 @@ def home():
 
 @app.post("/analyze-audio")
 async def analyze_audio(file: UploadFile = File(...)):
-    suffix = os.path.splitext(file.filename)[1] or ".wav"
+    temp_path = None
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
-        temp_file.write(await file.read())
-        temp_path = temp_file.name
+    try:
+        suffix = os.path.splitext(file.filename or "")[1].lower()
 
-    y, sr = librosa.load(temp_path)
+        if suffix not in [".mp3", ".wav"]:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": "Unsupported file type",
+                    "message": "Please upload MP3 or WAV only",
+                    "filename": file.filename
+                }
+            )
 
-    tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
+            temp_file.write(await file.read())
+            temp_path = temp_file.name
 
-    return {
-        "bpm": round(float(tempo)),
-        "filename": file.filename,
-        "message": "Audio analyzed successfully"
-    }
+        y, sr = librosa.load(temp_path, sr=None, mono=True)
+
+        tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
+
+        return {
+            "bpm": round(float(tempo)),
+            "filename": file.filename,
+            "sample_rate": sr,
+            "duration_seconds": round(float(librosa.get_duration(y=y, sr=sr)), 2),
+            "message": "Audio analyzed successfully"
+        }
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "Audio analysis failed",
+                "details": str(e),
+                "trace": traceback.format_exc()
+            }
+        )
+
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.remove(temp_path)
