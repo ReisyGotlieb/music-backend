@@ -12,6 +12,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://sing-to-song.lovable.app",
+        "https://singto-song.lovable.app",
         "https://lovable.dev",
         "http://localhost:3000",
         "http://localhost:5173",
@@ -20,7 +21,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 @app.get("/")
 def home():
     return {"status": "Music backend is running"}
