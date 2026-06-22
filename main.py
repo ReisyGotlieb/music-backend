@@ -7,6 +7,7 @@ import pretty_midi
 import tempfile
 import os
 import traceback
+import time
 
 app = FastAPI()
 
@@ -88,8 +89,8 @@ async def analyze_audio(file: UploadFile = File(...)):
                     "success": False,
                     "error": "Unsupported file type",
                     "message": "Please upload MP3 or WAV only",
-                    "filename": file.filename
-                }
+                    "filename": file.filename,
+                },
             )
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
@@ -117,7 +118,7 @@ async def analyze_audio(file: UploadFile = File(...)):
             "filename": file.filename,
             "sample_rate": sr,
             "duration_seconds": round(float(duration), 2),
-            "message": "Audio analyzed successfully"
+            "message": "Audio analyzed successfully",
         }
 
     except Exception as e:
@@ -127,51 +128,121 @@ async def analyze_audio(file: UploadFile = File(...)):
             content={
                 "success": False,
                 "error": "Audio analysis failed",
-                "details": str(e)
-            }
+                "details": str(e),
+            },
         )
 
     finally:
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
 
+def add_note(instrument, pitch, start, end, velocity):
+    instrument.notes.append(
+        pretty_midi.Note(
+            velocity=velocity,
+            pitch=int(pitch),
+            start=float(start),
+            end=float(end),
+        )
+    )
+
+def add_chord_hit(instrument, notes, start, duration, velocity):
+    for pitch in notes:
+        add_note(instrument, pitch, start, start + duration, velocity)
+
+def add_accompaniment_pattern(piano, bass, chord_name, start_time, beat_duration):
+    notes = CHORD_NOTES.get(chord_name, CHORD_NOTES["C"])
+
+    root = notes[0]
+    third = notes[1]
+    fifth = notes[2]
+
+    bass_root = root - 24
+    bass_fifth = fifth - 24
+
+    # תיבה אחת = 4 פעימות
+    # יד שמאל: בס פעימה 1 + חמישית פעימה 3
+    add_note(bass, bass_root, start_time, start_time + beat_duration * 1.8, 82)
+    add_note(bass, bass_fifth, start_time + beat_duration * 2, start_time + beat_duration * 3.8, 70)
+
+    # יד ימין: תבנית קצבית יותר חיה
+    hit_duration = beat_duration * 0.75
+
+    add_chord_hit(piano, [root, third, fifth], start_time, hit_duration, 72)
+    add_chord_hit(piano, [third, fifth, root + 12], start_time + beat_duration, hit_duration, 64)
+    add_chord_hit(piano, [root, third, fifth], start_time + beat_duration * 2, hit_duration, 76)
+    add_chord_hit(piano, [third, fifth, root + 12], start_time + beat_duration * 3, hit_duration, 66)
+
+    # צליל מעבר קטן בסוף התיבה
+    add_note(piano, fifth + 12, start_time + beat_duration * 3.5, start_time + beat_duration * 3.9, 54)
+
 @app.post("/generate-accompaniment")
 async def generate_accompaniment(data: AccompanimentRequest):
+    output_path = None
+
     try:
-        bpm = data.bpm or 90
+        request_id = int(time.time())
+        bpm = int(data.bpm or 90)
         chords = data.chords or ["C", "Am", "F", "G"]
 
-        midi = pretty_midi.PrettyMIDI(initial_tempo=bpm)
-        piano = pretty_midi.Instrument(program=pretty_midi.instrument_name_to_program("Acoustic Grand Piano"))
+        clean_chords = []
+        for chord in chords:
+            if chord in CHORD_NOTES:
+                clean_chords.append(chord)
 
-        beat_duration = 60 / bpm
-        chord_duration = beat_duration * 4
+        if not clean_chords:
+            clean_chords = ["C", "Am", "F", "G"]
+
+        print("generate-accompaniment called")
+        print("request_id:", request_id)
+        print("received bpm:", bpm)
+        print("received chords:", clean_chords)
+
+        midi = pretty_midi.PrettyMIDI(initial_tempo=bpm)
+
+        piano = pretty_midi.Instrument(
+            program=pretty_midi.instrument_name_to_program("Acoustic Grand Piano"),
+            name="Right hand chords - " + "-".join(clean_chords),
+        )
+
+        bass = pretty_midi.Instrument(
+            program=pretty_midi.instrument_name_to_program("Acoustic Grand Piano"),
+            name="Left hand bass - " + "-".join(clean_chords),
+        )
+
+        beat_duration = 60.0 / bpm
+        bar_duration = beat_duration * 4
 
         current_time = 0.0
 
-        for chord in chords:
-            notes = CHORD_NOTES.get(chord, CHORD_NOTES["C"])
+        # 4 סבבים של האקורדים, כדי שיהיה קובץ יותר ארוך וברור
+        repeats = 4
 
-            for note_number in notes:
-                note = pretty_midi.Note(
-                    velocity=80,
-                    pitch=note_number,
-                    start=current_time,
-                    end=current_time + chord_duration
+        for repeat_index in range(repeats):
+            for chord_name in clean_chords:
+                add_accompaniment_pattern(
+                    piano=piano,
+                    bass=bass,
+                    chord_name=chord_name,
+                    start_time=current_time,
+                    beat_duration=beat_duration,
                 )
-                piano.notes.append(note)
+                current_time += bar_duration
 
-            current_time += chord_duration
-
+        midi.instruments.append(bass)
         midi.instruments.append(piano)
 
         output_path = tempfile.NamedTemporaryFile(delete=False, suffix=".mid").name
         midi.write(output_path)
 
+        file_size = os.path.getsize(output_path)
+        print("generated midi path:", output_path)
+        print("generated midi size:", file_size)
+
         return FileResponse(
             output_path,
             media_type="audio/midi",
-            filename="accompaniment.mid"
+            filename=f"accompaniment_{request_id}.mid",
         )
 
     except Exception as e:
@@ -181,6 +252,6 @@ async def generate_accompaniment(data: AccompanimentRequest):
             content={
                 "success": False,
                 "error": "Accompaniment generation failed",
-                "details": str(e)
-            }
+                "details": str(e),
+            },
         )
