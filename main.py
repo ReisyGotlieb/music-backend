@@ -39,23 +39,27 @@ CHORD_NOTES = {
 CHORD_TEMPLATES = {}
 for chord_name, midi_notes in CHORD_NOTES.items():
     template = np.zeros(12)
-    for n in midi_notes:
-        template[n % 12] = 1
+    for note in midi_notes:
+        template[note % 12] = 1
     CHORD_TEMPLATES[chord_name] = template
+
 
 @app.get("/")
 def home():
     return {"status": "Music backend is running"}
 
+
 @app.get("/test")
 def test():
     return {"success": True, "message": "API is working"}
+
 
 def get_bpm(y, sr):
     tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
     if hasattr(tempo, "__len__"):
         return float(tempo[0])
     return float(tempo)
+
 
 def detect_best_chord(chroma_vector):
     best_chord = "C"
@@ -69,8 +73,9 @@ def detect_best_chord(chroma_vector):
 
     return best_chord
 
+
 def detect_chord_progression(y, sr, bpm, max_chords=16):
-    chroma = librosa.feature.chroma_stft(y=y, sr=sr)
+    chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
     duration = librosa.get_duration(y=y, sr=sr)
 
     beat_duration = 60.0 / bpm
@@ -100,7 +105,7 @@ def detect_chord_progression(y, sr, bpm, max_chords=16):
         chords.append(chord)
 
     if not chords:
-        chords = ["C", "Am", "F", "G"]
+        return ["C", "Am", "F", "G"]
 
     cleaned = []
     for chord in chords:
@@ -108,6 +113,7 @@ def detect_chord_progression(y, sr, bpm, max_chords=16):
             cleaned.append(chord)
 
     return cleaned[:max_chords]
+
 
 def add_note(instrument, pitch, start, end, velocity):
     instrument.notes.append(
@@ -119,17 +125,16 @@ def add_note(instrument, pitch, start, end, velocity):
         )
     )
 
+
 def add_chord(instrument, notes, start, duration, velocity):
     for note in notes:
         add_note(instrument, note, start, start + duration, velocity)
 
+
 def add_bar_pattern(piano, bass, chord_name, start_time, beat_duration):
     notes = CHORD_NOTES.get(chord_name, CHORD_NOTES["C"])
 
-    root = notes[0]
-    third = notes[1]
-    fifth = notes[2]
-
+    root, third, fifth = notes
     bass_root = root - 24
     bass_fifth = fifth - 24
 
@@ -138,12 +143,13 @@ def add_bar_pattern(piano, bass, chord_name, start_time, beat_duration):
 
     hit = beat_duration * 0.65
 
-    add_chord(piano, [root, third, fifth], start_time, hit, 72)
+    add_chord(piano, [root, third, fifth], start_time, hit, 75)
     add_chord(piano, [third, fifth, root + 12], start_time + beat_duration, hit, 62)
-    add_chord(piano, [root, third, fifth], start_time + beat_duration * 2, hit, 78)
+    add_chord(piano, [root, third, fifth], start_time + beat_duration * 2, hit, 80)
     add_chord(piano, [third, fifth, root + 12], start_time + beat_duration * 3, hit, 66)
 
     add_note(piano, fifth + 12, start_time + beat_duration * 3.5, start_time + beat_duration * 3.9, 55)
+
 
 def create_midi_from_chords(chords, bpm):
     request_id = int(time.time())
@@ -152,21 +158,20 @@ def create_midi_from_chords(chords, bpm):
 
     piano = pretty_midi.Instrument(
         program=pretty_midi.instrument_name_to_program("Acoustic Grand Piano"),
-        name="Right hand - " + "-".join(chords),
+        name="Piano chords - " + "-".join(chords),
     )
 
     bass = pretty_midi.Instrument(
         program=pretty_midi.instrument_name_to_program("Acoustic Grand Piano"),
-        name="Left hand - " + "-".join(chords),
+        name="Bass - " + "-".join(chords),
     )
 
     beat_duration = 60.0 / bpm
-    bar_duration = beat_duration * 4
     current_time = 0.0
 
     for chord in chords:
         add_bar_pattern(piano, bass, chord, current_time, beat_duration)
-        current_time += bar_duration
+        current_time += beat_duration * 4
 
     midi.instruments.append(bass)
     midi.instruments.append(piano)
@@ -175,6 +180,7 @@ def create_midi_from_chords(chords, bpm):
     midi.write(output_path)
 
     return output_path, request_id
+
 
 @app.post("/analyze-audio")
 async def analyze_audio(file: UploadFile = File(...)):
@@ -200,24 +206,24 @@ async def analyze_audio(file: UploadFile = File(...)):
 
         y, sr = librosa.load(temp_path, sr=22050, mono=True, duration=30)
 
-        bpm = get_bpm(y, sr)
+        bpm = round(get_bpm(y, sr))
         duration = librosa.get_duration(y=y, sr=sr)
-        chords = detect_chord_progression(y, sr, bpm, max_chords=8)
+        chords = detect_chord_progression(y, sr, bpm, max_chords=12)
 
         notes = []
-        for chord in chords[:3]:
+        for chord in chords:
             for pitch in CHORD_NOTES.get(chord, []):
-                note = NOTE_NAMES[pitch % 12]
-                if note not in notes:
-                    notes.append(note)
+                note_name = NOTE_NAMES[pitch % 12]
+                if note_name not in notes:
+                    notes.append(note_name)
 
         key = chords[0].replace("m", "") if chords else "C"
 
         return {
             "success": True,
-            "bpm": round(bpm),
+            "bpm": bpm,
             "key": key,
-            "notes": notes[:4],
+            "notes": notes[:5],
             "suggested_chords": chords,
             "filename": file.filename,
             "sample_rate": sr,
@@ -240,13 +246,16 @@ async def analyze_audio(file: UploadFile = File(...)):
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
 
+
 @app.post("/generate-accompaniment-from-audio")
 async def generate_accompaniment_from_audio(file: UploadFile = File(...)):
     temp_path = None
 
     try:
-        print("=== GENERATE FROM AUDIO CALLED ===")
-        print("filename:", file.filename)
+        print("===================================")
+        print("GENERATE ACCOMPANIMENT FROM AUDIO")
+        print("FILE:", file.filename)
+        print("===================================")
 
         suffix = os.path.splitext(file.filename or "")[1].lower()
 
@@ -270,13 +279,13 @@ async def generate_accompaniment_from_audio(file: UploadFile = File(...)):
         bpm = round(get_bpm(y, sr))
         chords = detect_chord_progression(y, sr, bpm, max_chords=12)
 
-        print("detected bpm:", bpm)
-        print("detected chords:", chords)
+        print("Detected BPM:", bpm)
+        print("Detected chords:", chords)
 
         output_path, request_id = create_midi_from_chords(chords, bpm)
 
-        print("generated midi:", output_path)
-        print("midi size:", os.path.getsize(output_path))
+        print("Generated MIDI:", output_path)
+        print("MIDI size:", os.path.getsize(output_path))
 
         return FileResponse(
             output_path,
@@ -299,13 +308,14 @@ async def generate_accompaniment_from_audio(file: UploadFile = File(...)):
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
 
+
 @app.post("/generate-accompaniment")
-async def generate_accompaniment_fallback():
+async def generate_accompaniment_old():
     return JSONResponse(
         status_code=400,
         content={
             "success": False,
             "error": "Use /generate-accompaniment-from-audio instead",
-            "message": "This version needs the audio file itself to create a better accompaniment.",
+            "message": "This endpoint is old. Send the audio file itself to /generate-accompaniment-from-audio.",
         },
     )
