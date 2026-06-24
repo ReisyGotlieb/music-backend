@@ -55,26 +55,37 @@ def smooth_chords(chords):
 
 def detect_chords(y, sr, bpm):
     chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
-    duration = librosa.get_duration(y=y, sr=sr)
 
-    segment_seconds = 1.0
+    tempo, beat_frames = librosa.beat.beat_track(
+        y=y,
+        sr=sr
+    )
+
+    beat_frames = np.asarray(beat_frames)
+
+    if len(beat_frames) < 8:
+        return ["C", "Am", "F", "G"]
+
     chords = []
 
-    t = 0.0
+    beats_per_bar = 4
 
-    while t < duration:
-        start_frame = librosa.time_to_frames(t, sr=sr)
-        end_frame = librosa.time_to_frames(min(t + segment_seconds, duration), sr=sr)
+    for i in range(0, len(beat_frames) - beats_per_bar, beats_per_bar):
 
-        if end_frame > start_frame:
-            section = chroma[:, start_frame:end_frame]
-            if section.size > 0:
-                avg = section.mean(axis=1)
-                chord = best_chord(avg)
-                chords.append(chord)
+        start_frame = beat_frames[i]
+        end_frame = beat_frames[i + beats_per_bar]
 
-        t += segment_seconds
+        section = chroma[:, start_frame:end_frame]
+
+        if section.size == 0:
+            continue
+
+        avg = section.mean(axis=1)
+
+        chord = best_chord(avg)
+
+        chords.append(chord)
 
     chords = smooth_chords(chords)
 
-    return chords[:30] or ["C", "Am", "F", "G"]
+    return chords[:64]
