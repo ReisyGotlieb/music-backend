@@ -113,6 +113,32 @@ def add_bar_arrangement(piano, bass, pad, arp, item, start, bpm):
 
     add_chord(pad, [root - 12, third, fifth], start, bar_end, max(28, v - 18))
 
+    # Rhythm Guitar
+add_chord(
+    guitar,
+    [root + 12, third + 12, fifth + 12],
+    start,
+    bar_end,
+    max(25, v - 15),
+)
+
+# Strings
+add_chord(
+    strings,
+    [root, third, fifth],
+    start,
+    bar_end,
+    max(20, v - 22),
+)
+
+# Choir
+add_chord(
+    choir,
+    [root - 12, third, fifth],
+    start,
+    bar_end,
+    max(15, v - 28),
+) 
     hit = beat * 0.65
     add_chord(piano, [root, third, fifth], start, start + hit, min(105, v + 5))
     add_chord(piano, [third, fifth, root + 12], start + beat, start + beat + hit, max(40, v - 8))
@@ -145,6 +171,21 @@ def generate_rich_midi(arrangement_items, bpm):
     pad = pretty_midi.Instrument(program=48, name="Strings pad")
     arp = pretty_midi.Instrument(program=4, name="Arpeggio")
     drums = pretty_midi.Instrument(program=0, is_drum=True, name="Drums")
+
+    guitar = pretty_midi.Instrument(
+    program=24,   # Nylon Guitar
+    name="Rhythm Guitar"
+)
+
+strings = pretty_midi.Instrument(
+    program=49,   # String Ensemble
+    name="Strings"
+)
+
+choir = pretty_midi.Instrument(
+    program=52,   # Choir Aahs
+    name="Choir"
+)
 
     beat = 60.0 / bpm
     bar_seconds = beat * 4
