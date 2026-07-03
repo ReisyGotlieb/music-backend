@@ -1,5 +1,3 @@
-from services.harmony_engine import build_harmony
-from services.arranger import create_arrangement_plan
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
@@ -8,7 +6,8 @@ import os
 import traceback
 
 from services.audio_analysis import load_audio, detect_bpm, detect_duration
-from services.chord_detection import detect_chords
+from services.melody_analysis import generate_chords_from_vocal_melody
+from services.arranger import create_arrangement_plan
 from services.midi_generator import generate_rich_midi
 
 app = FastAPI()
@@ -53,18 +52,19 @@ async def analyze_audio(file: UploadFile = File(...)):
 
         bpm = round(detect_bpm(y, sr))
         duration = detect_duration(y, sr)
-        chords = detect_chords(y, sr, bpm)
+        melody_result = generate_chords_from_vocal_melody(y, sr)
 
         return {
             "success": True,
             "bpm": bpm,
-            "key": chords[0].replace("m", "") if chords else "C",
-            "notes": [],
-            "suggested_chords": chords,
+            "key": melody_result["key"],
+            "mode": melody_result["mode"],
+            "notes": melody_result["notes"],
+            "suggested_chords": melody_result["chords"],
             "filename": file.filename,
             "sample_rate": sr,
             "duration_seconds": round(float(duration), 2),
-            "message": "Audio analyzed successfully",
+            "message": "Vocal melody analyzed successfully",
         }
 
     except ValueError as e:
@@ -90,7 +90,7 @@ async def generate_accompaniment_from_audio(file: UploadFile = File(...)):
 
     try:
         print("===================================")
-        print("GENERATE RICH ACCOMPANIMENT")
+        print("GENERATE VOCAL-BASED ACCOMPANIMENT")
         print("FILE:", file.filename)
         print("===================================")
 
@@ -100,12 +100,22 @@ async def generate_accompaniment_from_audio(file: UploadFile = File(...)):
         y, sr = load_audio(temp_path)
 
         bpm = round(detect_bpm(y, sr))
-        chords = detect_chords(y, sr, bpm)
+        duration = detect_duration(y, sr)
+        melody_result = generate_chords_from_vocal_melody(y, sr)
+
+        chords = melody_result["chords"]
 
         print("Detected BPM:", bpm)
-        print("Detected chords:", chords)
+        print("Detected key:", melody_result["key"])
+        print("Detected mode:", melody_result["mode"])
+        print("Generated chords:", chords)
 
-        output_path, request_id, file_size = generate_rich_midi(chords, bpm)
+        arrangement = create_arrangement_plan(
+            chords=chords,
+            duration_seconds=duration,
+        )
+
+        output_path, request_id, file_size = generate_rich_midi(arrangement, bpm)
 
         print("Generated MIDI:", output_path)
         print("MIDI size:", file_size)
@@ -113,7 +123,7 @@ async def generate_accompaniment_from_audio(file: UploadFile = File(...)):
         return FileResponse(
             output_path,
             media_type="audio/midi",
-            filename=f"rich_accompaniment_{request_id}.mid",
+            filename=f"vocal_accompaniment_{request_id}.mid",
         )
 
     except ValueError as e:
@@ -128,7 +138,7 @@ async def generate_accompaniment_from_audio(file: UploadFile = File(...)):
             status_code=500,
             content={
                 "success": False,
-                "error": "Rich accompaniment generation failed",
+                "error": "Vocal accompaniment generation failed",
                 "details": str(e),
             },
         )
