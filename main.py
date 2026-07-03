@@ -1,3 +1,5 @@
+from services.harmony_engine import build_harmony
+from services.arranger import create_arrangement_plan
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
