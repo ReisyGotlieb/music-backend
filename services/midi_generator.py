@@ -33,7 +33,47 @@ def add_chord(inst, notes, start, end, velocity):
     for n in notes:
         add_note(inst, n, start, end, velocity)
 
-def add_drums(drums, start, seconds, bpm, intensity):
+def get_velocity_base(intensity):
+    if intensity == "soft":
+        return 45
+    if intensity == "medium":
+        return 62
+    return 78
+
+def normalize_arrangement(input_items):
+    arrangement = []
+
+    for index, item in enumerate(input_items):
+        if isinstance(item, dict):
+            chord = item.get("chord", "C")
+            intensity = item.get("intensity", "medium")
+            use_drums = item.get("use_drums", True)
+            use_arpeggio = item.get("use_arpeggio", True)
+        else:
+            chord = item
+            intensity = "medium"
+            use_drums = True
+            use_arpeggio = True
+
+        if chord not in CHORD_NOTES:
+            chord = "C"
+
+        arrangement.append({
+            "chord": chord,
+            "intensity": intensity,
+            "use_drums": use_drums,
+            "use_arpeggio": use_arpeggio,
+            "bar_index": index,
+        })
+
+    return arrangement or [
+        {"chord": "C", "intensity": "soft", "use_drums": False, "use_arpeggio": False, "bar_index": 0},
+        {"chord": "G", "intensity": "medium", "use_drums": True, "use_arpeggio": False, "bar_index": 1},
+        {"chord": "Am", "intensity": "full", "use_drums": True, "use_arpeggio": True, "bar_index": 2},
+        {"chord": "F", "intensity": "full", "use_drums": True, "use_arpeggio": True, "bar_index": 3},
+    ]
+
+def add_drums(drums, start, bar_seconds, bpm, intensity):
     beat = 60.0 / bpm
     kick = 36
     snare = 38
@@ -41,67 +81,62 @@ def add_drums(drums, start, seconds, bpm, intensity):
     open_hat = 46
     crash = 49
 
-    t = start
-    end = start + seconds
-    beat_index = 0
+    v = get_velocity_base(intensity)
 
-    add_note(drums, crash, start, start + 0.08, 70 + intensity)
+    add_note(drums, crash, start, start + 0.08, min(100, v + 15))
 
-    while t < end:
-        add_note(drums, closed_hat, t, t + 0.03, 38 + intensity)
+    for i in range(8):
+        t = start + i * (beat / 2)
+        add_note(drums, closed_hat, t, t + 0.03, min(90, v - 10))
 
-        if beat_index % 4 == 0:
-            add_note(drums, kick, t, t + 0.05, 75 + intensity)
+    add_note(drums, kick, start, start + 0.05, min(110, v + 18))
+    add_note(drums, snare, start + beat * 2, start + beat * 2 + 0.05, min(105, v + 8))
 
-        if beat_index % 4 == 2:
-            add_note(drums, snare, t, t + 0.05, 70 + intensity)
+    if intensity == "full":
+        add_note(drums, kick, start + beat * 2.5, start + beat * 2.5 + 0.05, min(105, v + 10))
+        add_note(drums, open_hat, start + beat * 3.5, start + beat * 3.5 + 0.05, min(95, v))
 
-        if beat_index % 8 == 7:
-            add_note(drums, open_hat, t, t + 0.04, 45 + intensity)
+def add_bar_arrangement(piano, bass, pad, arp, item, start, bpm):
+    chord = item["chord"]
+    intensity = item["intensity"]
+    use_arpeggio = item["use_arpeggio"]
 
-        t += beat / 2
-        beat_index += 1
-
-def add_second_arrangement(piano, bass, pad, arp, chord, start, bpm, index):
     notes = CHORD_NOTES.get(chord, CHORD_NOTES["C"])
     root, third, fifth = notes
 
     beat = 60.0 / bpm
-    end = start + 1.0
+    bar_end = start + beat * 4
+    v = get_velocity_base(intensity)
 
-    intensity = min(20, index * 2)
+    add_note(bass, root - 24, start, start + beat * 1.8, min(110, v + 22))
+    add_note(bass, fifth - 24, start + beat * 2, start + beat * 3.8, min(105, v + 12))
 
-    # Bass changes every second
-    bass_note = root - 24 if index % 2 == 0 else fifth - 24
-    add_note(bass, bass_note, start, end, 72 + intensity)
+    add_chord(pad, [root - 12, third, fifth], start, bar_end, max(28, v - 18))
 
-    # Pad holds harmony softly
-    add_chord(pad, [root - 12, third, fifth], start, end, 38 + intensity)
+    hit = beat * 0.65
+    add_chord(piano, [root, third, fifth], start, start + hit, min(105, v + 5))
+    add_chord(piano, [third, fifth, root + 12], start + beat, start + beat + hit, max(40, v - 8))
+    add_chord(piano, [root, third, fifth], start + beat * 2, start + beat * 2 + hit, min(110, v + 8))
+    add_chord(piano, [third, fifth, root + 12], start + beat * 3, start + beat * 3 + hit, max(42, v - 5))
 
-    # Piano rhythmic hits
-    hit_len = min(beat * 0.55, 0.35)
+    if use_arpeggio:
+        arp_notes = [root, third, fifth, root + 12, fifth, third, root, fifth]
+        step = beat / 2
 
-    add_chord(piano, [root, third, fifth], start, start + hit_len, 62 + intensity)
+        for i, pitch in enumerate(arp_notes):
+            s = start + i * step
+            add_note(
+                arp,
+                pitch + 12,
+                s,
+                s + step * 0.75,
+                max(35, min(90, v - 12 + random.randint(0, 10))),
+            )
 
-    if start + beat < end:
-        add_chord(piano, [third, fifth, root + 12], start + beat, min(start + beat + hit_len, end), 55 + intensity)
-
-    # Arpeggio inside each second
-    arp_notes = [root, third, fifth, root + 12, fifth, third]
-    step = 1.0 / len(arp_notes)
-
-    for i, pitch in enumerate(arp_notes):
-        s = start + i * step
-        e = min(s + step * 0.75, end)
-        add_note(arp, pitch + 12, s, e, 48 + random.randint(0, 10))
-
-def generate_rich_midi(chords, bpm):
+def generate_rich_midi(arrangement_items, bpm):
     request_id = int(time.time())
     bpm = int(bpm or 90)
-
-    clean_chords = [c for c in chords if c in CHORD_NOTES]
-    if not clean_chords:
-        clean_chords = ["C", "Am", "F", "G"]
+    arrangement = normalize_arrangement(arrangement_items)
 
     midi = pretty_midi.PrettyMIDI(initial_tempo=bpm)
 
@@ -111,29 +146,30 @@ def generate_rich_midi(chords, bpm):
     arp = pretty_midi.Instrument(program=4, name="Arpeggio")
     drums = pretty_midi.Instrument(program=0, is_drum=True, name="Drums")
 
-    total_seconds = len(clean_chords)
+    beat = 60.0 / bpm
+    bar_seconds = beat * 4
 
-    for i, chord in enumerate(clean_chords):
-        start = float(i)
+    for i, item in enumerate(arrangement):
+        start = i * bar_seconds
 
-        add_second_arrangement(
+        add_bar_arrangement(
             piano=piano,
             bass=bass,
             pad=pad,
             arp=arp,
-            chord=chord,
+            item=item,
             start=start,
             bpm=bpm,
-            index=i,
         )
 
-    add_drums(
-        drums=drums,
-        start=0.0,
-        seconds=float(total_seconds),
-        bpm=bpm,
-        intensity=12,
-    )
+        if item["use_drums"]:
+            add_drums(
+                drums=drums,
+                start=start,
+                bar_seconds=bar_seconds,
+                bpm=bpm,
+                intensity=item["intensity"],
+            )
 
     midi.instruments.extend([bass, pad, piano, arp, drums])
 
