@@ -212,8 +212,16 @@ choir = pretty_midi.Instrument(
                 intensity=item["intensity"],
             )
 
-    midi.instruments.extend([bass, pad, piano, arp, drums])
-
+    midi.instruments.extend([
+    bass,
+    guitar,
+    piano,
+    strings,
+    choir,
+    pad,
+    arp,
+    drums,
+])
     output_path = tempfile.NamedTemporaryFile(delete=False, suffix=".mid").name
     midi.write(output_path)
 
