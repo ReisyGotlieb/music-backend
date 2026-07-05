@@ -73,6 +73,41 @@ def normalize_arrangement(input_items):
         {"chord": "F", "intensity": "full", "use_drums": True, "use_arpeggio": True, "bar_index": 3},
     ]
 
+def expand_arrangement_to_duration(arrangement, bpm, target_duration):
+    if not target_duration:
+        return arrangement
+
+    beat = 60.0 / bpm
+    bar_seconds = beat * 4
+    needed_bars = int(target_duration / bar_seconds) + 1
+
+    expanded = []
+    i = 0
+
+    while len(expanded) < needed_bars:
+        item = dict(arrangement[i % len(arrangement)])
+        item["bar_index"] = len(expanded)
+
+        # בנייה הדרגתית לאורך השיר
+        ratio = len(expanded) / max(needed_bars - 1, 1)
+        if ratio < 0.25:
+            item["intensity"] = "soft"
+            item["use_drums"] = False
+            item["use_arpeggio"] = False
+        elif ratio < 0.6:
+            item["intensity"] = "medium"
+            item["use_drums"] = True
+            item["use_arpeggio"] = False
+        else:
+            item["intensity"] = "full"
+            item["use_drums"] = True
+            item["use_arpeggio"] = True
+
+        expanded.append(item)
+        i += 1
+
+    return expanded
+
 def add_drums(drums, start, bar_seconds, bpm, intensity):
     beat = 60.0 / bpm
     v = get_velocity_base(intensity)
@@ -83,7 +118,8 @@ def add_drums(drums, start, bar_seconds, bpm, intensity):
     open_hat = 46
     crash = 49
 
-    add_note(drums, crash, start, start + 0.08, min(100, v + 15))
+    if intensity in ["medium", "full"]:
+        add_note(drums, crash, start, start + 0.08, min(100, v + 15))
 
     for i in range(8):
         t = start + i * (beat / 2)
@@ -136,10 +172,24 @@ def add_bar_arrangement(piano, bass, pad, arp, guitar, strings, choir, item, sta
                 max(35, min(90, v - 12 + random.randint(0, 10))),
             )
 
-def generate_rich_midi(arrangement_items, bpm):
+def add_ending(piano, bass, pad, arrangement, start, bpm):
+    if not arrangement:
+        return
+
+    last_chord = arrangement[-1]["chord"]
+    notes = CHORD_NOTES.get(last_chord, CHORD_NOTES["C"])
+    root, third, fifth = notes
+    beat = 60.0 / bpm
+
+    add_note(bass, root - 24, start, start + beat * 2, 70)
+    add_chord(pad, [root - 12, third, fifth], start, start + beat * 2, 45)
+    add_chord(piano, [root, third, fifth, root + 12], start, start + beat * 2, 80)
+
+def generate_rich_midi(arrangement_items, bpm, target_duration=None):
     request_id = int(time.time())
     bpm = int(bpm or 90)
     arrangement = normalize_arrangement(arrangement_items)
+    arrangement = expand_arrangement_to_duration(arrangement, bpm, target_duration)
 
     midi = pretty_midi.PrettyMIDI(initial_tempo=bpm)
 
@@ -179,6 +229,9 @@ def generate_rich_midi(arrangement_items, bpm):
                 bpm=bpm,
                 intensity=item["intensity"],
             )
+
+    ending_start = len(arrangement) * bar_seconds
+    add_ending(piano, bass, pad, arrangement, ending_start, bpm)
 
     midi.instruments.extend([
         bass,
