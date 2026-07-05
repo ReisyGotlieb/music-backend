@@ -1,109 +1,163 @@
 import librosa
 import numpy as np
+from collections import Counter
 
 NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 
-MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11]
-MINOR_SCALE = [0, 2, 3, 5, 7, 8, 10]
-
-MAJOR_PROGRESSIONS = {
-    "C": ["C", "G", "Am", "F"],
-    "D": ["D", "A", "Bm", "G"],
-    "E": ["E", "B", "C#m", "A"],
-    "F": ["F", "C", "Dm", "Bb"],
-    "G": ["G", "D", "Em", "C"],
-    "A": ["A", "E", "F#m", "D"],
-    "B": ["B", "F#", "G#m", "E"],
+CHORDS_BY_KEY = {
+    "C": ["C", "Dm", "Em", "F", "G", "Am"],
+    "D": ["D", "Em", "F#m", "G", "A", "Bm"],
+    "E": ["E", "F#m", "G#m", "A", "B", "C#m"],
+    "F": ["F", "Gm", "Am", "Bb", "C", "Dm"],
+    "G": ["G", "Am", "Bm", "C", "D", "Em"],
+    "A": ["A", "Bm", "C#m", "D", "E", "F#m"],
+    "B": ["B", "C#m", "D#m", "E", "F#", "G#m"],
 }
 
-MINOR_PROGRESSIONS = {
-    "A": ["Am", "F", "C", "G"],
-    "B": ["Bm", "G", "D", "A"],
-    "C": ["Cm", "G#", "D#", "A#"],
-    "D": ["Dm", "Bb", "F", "C"],
-    "E": ["Em", "C", "G", "D"],
-    "F": ["Fm", "C#", "G#", "D#"],
-    "G": ["Gm", "D#", "A#", "F"],
+CHORD_NOTES = {
+    "C": ["C", "E", "G"], "Dm": ["D", "F", "A"], "Em": ["E", "G", "B"],
+    "F": ["F", "A", "C"], "G": ["G", "B", "D"], "Am": ["A", "C", "E"],
+    "D": ["D", "F#", "A"], "F#m": ["F#", "A", "C#"], "A": ["A", "C#", "E"],
+    "Bm": ["B", "D", "F#"], "E": ["E", "G#", "B"], "G#m": ["G#", "B", "D#"],
+    "B": ["B", "D#", "F#"], "C#m": ["C#", "E", "G#"], "D#m": ["D#", "F#", "A#"],
+    "Gm": ["G", "A#", "D"], "Bb": ["A#", "D", "F"],
 }
 
-def hz_to_note_name(freq):
-    if freq <= 0:
+def hz_to_note(freq):
+    if freq is None or np.isnan(freq) or freq <= 0:
         return None
-
     midi = int(round(librosa.hz_to_midi(freq)))
     return NOTE_NAMES[midi % 12]
 
-def detect_vocal_melody_notes(y, sr):
-    f0, voiced_flag, voiced_probs = librosa.pyin(
+def extract_timed_notes(y, sr):
+    f0, voiced_flag, _ = librosa.pyin(
         y,
         fmin=librosa.note_to_hz("C2"),
         fmax=librosa.note_to_hz("C6")
     )
 
-    notes = []
-
+    timed_notes = []
     if f0 is None:
-        return notes
+        return timed_notes
 
-    for freq, voiced in zip(f0, voiced_flag):
-        if voiced and freq is not None and not np.isnan(freq):
-            note = hz_to_note_name(freq)
-            if note:
-                notes.append(note)
+    times = librosa.times_like(f0, sr=sr)
 
-    return notes
+    last_note = None
+    start_time = None
 
-def estimate_key_from_melody(notes):
+    for freq, voiced, t in zip(f0, voiced_flag, times):
+        note = hz_to_note(freq) if voiced else None
+
+        if note != last_note:
+            if last_note is not None and start_time is not None:
+                timed_notes.append({
+                    "note": last_note,
+                    "start": float(start_time),
+                    "end": float(t)
+                })
+
+            last_note = note
+            start_time = t if note is not None else None
+
+    if last_note is not None and start_time is not None:
+        timed_notes.append({
+            "note": last_note,
+            "start": float(start_time),
+            "end": float(times[-1])
+        })
+
+    return [
+        n for n in timed_notes
+        if n["end"] - n["start"] >= 0.15
+    ]
+
+def estimate_key(timed_notes):
+    notes = [n["note"] for n in timed_notes]
     if not notes:
-        return "C", "major"
+        return "C"
 
-    counts = {note: notes.count(note) for note in NOTE_NAMES}
-
+    counter = Counter(notes)
     best_key = "C"
-    best_mode = "major"
     best_score = -1
 
-    for root_index, root_note in enumerate(NOTE_NAMES):
-        major_notes = [NOTE_NAMES[(root_index + i) % 12] for i in MAJOR_SCALE]
-        minor_notes = [NOTE_NAMES[(root_index + i) % 12] for i in MINOR_SCALE]
+    for key, chords in CHORDS_BY_KEY.items():
+        key_notes = set()
+        for chord in chords:
+            key_notes.update(CHORD_NOTES.get(chord, []))
 
-        major_score = sum(counts.get(n, 0) for n in major_notes)
-        minor_score = sum(counts.get(n, 0) for n in minor_notes)
+        score = sum(counter.get(note, 0) for note in key_notes)
 
-        if major_score > best_score:
-            best_score = major_score
-            best_key = root_note
-            best_mode = "major"
+        if score > best_score:
+            best_score = score
+            best_key = key
 
-        if minor_score > best_score:
-            best_score = minor_score
-            best_key = root_note
-            best_mode = "minor"
+    return best_key
 
-    return best_key, best_mode
+def choose_chord_for_notes(notes, key):
+    candidates = CHORDS_BY_KEY.get(key, CHORDS_BY_KEY["C"])
 
-def generate_chords_from_vocal_melody(y, sr):
-    notes = detect_vocal_melody_notes(y, sr)
-    key, mode = estimate_key_from_melody(notes)
+    best_chord = candidates[0]
+    best_score = -1
 
-    base_key = key.replace("#", "")
+    for chord in candidates:
+        chord_notes = set(CHORD_NOTES.get(chord, []))
+        score = 0
 
-    if mode == "minor":
-        progression = MINOR_PROGRESSIONS.get(base_key, ["Am", "F", "C", "G"])
-    else:
-        progression = MAJOR_PROGRESSIONS.get(base_key, ["C", "G", "Am", "F"])
+        for note in notes:
+            if note in chord_notes:
+                score += 3
+            elif note == chord.replace("m", ""):
+                score += 2
+            else:
+                score -= 1
+
+        if score > best_score:
+            best_score = score
+            best_chord = chord
+
+    return best_chord
+
+def build_vocal_harmony(y, sr):
+    timed_notes = extract_timed_notes(y, sr)
+    key = estimate_key(timed_notes)
 
     duration = librosa.get_duration(y=y, sr=sr)
+    segment_seconds = 2.0
 
-    repeats = max(2, int(duration // 8) + 1)
+    arrangement_chords = []
+    t = 0.0
 
-    chords = []
-    for _ in range(repeats):
-        chords.extend(progression)
+    while t < duration:
+        segment_notes = [
+            n["note"] for n in timed_notes
+            if n["start"] < t + segment_seconds and n["end"] > t
+        ]
+
+        if segment_notes:
+            chord = choose_chord_for_notes(segment_notes, key)
+        else:
+            chord = arrangement_chords[-1]["chord"] if arrangement_chords else key
+
+        if not arrangement_chords or arrangement_chords[-1]["chord"] != chord:
+            arrangement_chords.append({
+                "chord": chord,
+                "start": float(t),
+                "end": float(min(t + segment_seconds, duration))
+            })
+        else:
+            arrangement_chords[-1]["end"] = float(min(t + segment_seconds, duration))
+
+        t += segment_seconds
+
+    notes_unique = list(dict.fromkeys([n["note"] for n in timed_notes]))
 
     return {
-        "notes": list(dict.fromkeys(notes[:40])),
         "key": key,
-        "mode": mode,
-        "chords": chords[:16]
+        "mode": "major",
+        "notes": notes_unique[:20],
+        "chords": [c["chord"] for c in arrangement_chords],
+        "timeline": arrangement_chords
     }
+
+def generate_chords_from_vocal_melody(y, sr):
+    return build_vocal_harmony(y, sr)
