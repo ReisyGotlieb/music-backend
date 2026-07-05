@@ -75,13 +75,13 @@ def normalize_arrangement(input_items):
 
 def add_drums(drums, start, bar_seconds, bpm, intensity):
     beat = 60.0 / bpm
+    v = get_velocity_base(intensity)
+
     kick = 36
     snare = 38
     closed_hat = 42
     open_hat = 46
     crash = 49
-
-    v = get_velocity_base(intensity)
 
     add_note(drums, crash, start, start + 0.08, min(100, v + 15))
 
@@ -96,7 +96,7 @@ def add_drums(drums, start, bar_seconds, bpm, intensity):
         add_note(drums, kick, start + beat * 2.5, start + beat * 2.5 + 0.05, min(105, v + 10))
         add_note(drums, open_hat, start + beat * 3.5, start + beat * 3.5 + 0.05, min(95, v))
 
-def add_bar_arrangement(piano, bass, pad, arp, item, start, bpm):
+def add_bar_arrangement(piano, bass, pad, arp, guitar, strings, choir, item, start, bpm):
     chord = item["chord"]
     intensity = item["intensity"]
     use_arpeggio = item["use_arpeggio"]
@@ -112,33 +112,10 @@ def add_bar_arrangement(piano, bass, pad, arp, item, start, bpm):
     add_note(bass, fifth - 24, start + beat * 2, start + beat * 3.8, min(105, v + 12))
 
     add_chord(pad, [root - 12, third, fifth], start, bar_end, max(28, v - 18))
+    add_chord(guitar, [root + 12, third + 12, fifth + 12], start, bar_end, max(25, v - 15))
+    add_chord(strings, [root, third, fifth], start, bar_end, max(20, v - 22))
+    add_chord(choir, [root - 12, third, fifth], start, bar_end, max(15, v - 28))
 
-    # Rhythm Guitar
-add_chord(
-    guitar,
-    [root + 12, third + 12, fifth + 12],
-    start,
-    bar_end,
-    max(25, v - 15),
-)
-
-# Strings
-add_chord(
-    strings,
-    [root, third, fifth],
-    start,
-    bar_end,
-    max(20, v - 22),
-)
-
-# Choir
-add_chord(
-    choir,
-    [root - 12, third, fifth],
-    start,
-    bar_end,
-    max(15, v - 28),
-) 
     hit = beat * 0.65
     add_chord(piano, [root, third, fifth], start, start + hit, min(105, v + 5))
     add_chord(piano, [third, fifth, root + 12], start + beat, start + beat + hit, max(40, v - 8))
@@ -170,22 +147,10 @@ def generate_rich_midi(arrangement_items, bpm):
     bass = pretty_midi.Instrument(program=33, name="Electric bass")
     pad = pretty_midi.Instrument(program=48, name="Strings pad")
     arp = pretty_midi.Instrument(program=4, name="Arpeggio")
+    guitar = pretty_midi.Instrument(program=24, name="Rhythm Guitar")
+    strings = pretty_midi.Instrument(program=49, name="Strings")
+    choir = pretty_midi.Instrument(program=52, name="Choir")
     drums = pretty_midi.Instrument(program=0, is_drum=True, name="Drums")
-
-    guitar = pretty_midi.Instrument(
-    program=24,   # Nylon Guitar
-    name="Rhythm Guitar"
-)
-
-strings = pretty_midi.Instrument(
-    program=49,   # String Ensemble
-    name="Strings"
-)
-
-choir = pretty_midi.Instrument(
-    program=52,   # Choir Aahs
-    name="Choir"
-)
 
     beat = 60.0 / bpm
     bar_seconds = beat * 4
@@ -198,6 +163,9 @@ choir = pretty_midi.Instrument(
             bass=bass,
             pad=pad,
             arp=arp,
+            guitar=guitar,
+            strings=strings,
+            choir=choir,
             item=item,
             start=start,
             bpm=bpm,
@@ -213,15 +181,16 @@ choir = pretty_midi.Instrument(
             )
 
     midi.instruments.extend([
-    bass,
-    guitar,
-    piano,
-    strings,
-    choir,
-    pad,
-    arp,
-    drums,
-])
+        bass,
+        guitar,
+        piano,
+        strings,
+        choir,
+        pad,
+        arp,
+        drums,
+    ])
+
     output_path = tempfile.NamedTemporaryFile(delete=False, suffix=".mid").name
     midi.write(output_path)
 
