@@ -103,6 +103,7 @@ async def generate_accompaniment_from_audio(file: UploadFile = File(...)):
         chords = detect_chords(y, sr, bpm)
 
         print("Detected BPM:", bpm)
+        print("Detected duration:", duration)
         print("Detected chords:", chords)
 
         arrangement = create_arrangement_plan(
@@ -110,11 +111,11 @@ async def generate_accompaniment_from_audio(file: UploadFile = File(...)):
             duration_seconds=duration,
         )
 
-    output_path, request_id, file_size = generate_rich_midi(
-    arrangement,
-    bpm,
-    target_duration=duration
-)
+        output_path, request_id, file_size = generate_rich_midi(
+            arrangement,
+            bpm,
+            target_duration=duration,
+        )
 
         print("Generated MIDI:", output_path)
         print("MIDI size:", file_size)
@@ -145,6 +146,7 @@ async def generate_accompaniment_from_audio(file: UploadFile = File(...)):
     finally:
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
+
 
 @app.post("/generate-accompaniment")
 async def generate_accompaniment_old():
