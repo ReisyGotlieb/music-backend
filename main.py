@@ -110,7 +110,7 @@ async def generate_accompaniment_from_audio(file: UploadFile = File(...)):
             duration_seconds=duration,
         )
 
-       output_path, request_id, file_size = generate_rich_midi(
+    output_path, request_id, file_size = generate_rich_midi(
     arrangement,
     bpm,
     target_duration=duration
