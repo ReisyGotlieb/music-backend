@@ -4,12 +4,14 @@ import tempfile
 from midi2audio import FluidSynth
 from pydub import AudioSegment
 
-# נתיב לקובץ ה-SoundFont שישמש לרינדור ה-MIDI
-# נתיב לקובץ ה-SoundFont (בודק קודם בתיקיית assets ואז בברירת המחדל של השרת)
+# נתיבי ה-SoundFont (בודק קודם בתיקיית assets ואז בברירת המחדל של השרת)
 SOUNDFONT_PATH = os.path.join(os.path.dirname(__file__), "..", "assets", "default.sf2")
 SYSTEM_SOUNDFONT = "/usr/share/sounds/sf2/FluidR3_GM.sf2"
 
 def render_audio_from_midi(midi_path: str) -> str:
+    """
+    מקבל נתיב לקובץ MIDI וממיר אותו לקובץ WAV באמצעות FluidSynth
+    """
     if not os.path.exists(midi_path):
         raise FileNotFoundError(f"MIDI file not found at {midi_path}")
         
@@ -18,39 +20,13 @@ def render_audio_from_midi(midi_path: str) -> str:
     temp_wav.close()
     
     try:
-        # קביעת ה-SoundFont המתאים
+        # קביעת ה-SoundFont המתאים לפי מה שקיים בשרת
         if os.path.exists(SOUNDFONT_PATH):
             fs = FluidSynth(sound_font=SOUNDFONT_PATH)
         elif os.path.exists(SYSTEM_SOUNDFONT):
             fs = FluidSynth(sound_font=SYSTEM_SOUNDFONT)
         else:
             print("Warning: No specific soundfont found, using system default.")
-            fs = FluidSynth()
-            
-        fs.midi_to_audio(midi_path, temp_wav_path)
-        return temp_wav_path
-        
-    except Exception as e:
-        if os.path.exists(temp_wav_path):
-            os.remove(temp_wav_path)
-        raise RuntimeError(f"Failed to render MIDI to audio: {str(e)}")
-
-def render_audio_from_midi(midi_path: str) -> str:
-    """
-    מקבל נתיב לקובץ MIDI ומממר אותו לקובץ WAV באמצעות FluidSynth
-    """
-    if not os.path.exists(midi_path):
-        raise FileNotFoundError(f"MIDI file not found at {midi_path}")
-        
-    temp_wav = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
-    temp_wav_path = temp_wav.name
-    temp_wav.close()
-    
-    try:
-        if os.path.exists(SOUNDFONT_PATH):
-            fs = FluidSynth(sound_font=SOUNDFONT_PATH)
-        else:
-            print(f"Warning: Soundfont not found at {SOUNDFONT_PATH}, using system default.")
             fs = FluidSynth()
             
         fs.midi_to_audio(midi_path, temp_wav_path)
