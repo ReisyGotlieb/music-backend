@@ -20,25 +20,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/")
 def home():
     return {"status": "Music backend is running"}
+
 
 @app.get("/test")
 def test():
     return {"success": True, "message": "API is working"}
 
+
 def save_upload_to_temp(file: UploadFile, content: bytes):
     suffix = os.path.splitext(file.filename or "")[1].lower()
 
-   if suffix not in [".mp3", ".wav", ".webm", ".ogg", ".m4a"]:
-        raise "Please upload MP3, WAV, WEBM, OGG or M4A"
-       
+    if suffix not in [".mp3", ".wav", ".webm", ".ogg", ".m4a"]:
+        raise ValueError("Please upload MP3, WAV, WEBM, OGG or M4A")
+
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     temp_file.write(content)
     temp_file.close()
 
     return temp_file.name
+
 
 @app.post("/analyze-audio")
 async def analyze_audio(file: UploadFile = File(...)):
@@ -69,19 +73,28 @@ async def analyze_audio(file: UploadFile = File(...)):
     except ValueError as e:
         return JSONResponse(
             status_code=400,
-            content={"success": False, "error": "Unsupported file type", "details": str(e)},
+            content={
+                "success": False,
+                "error": "Unsupported file type",
+                "details": str(e),
+            },
         )
 
     except Exception as e:
         print(traceback.format_exc())
         return JSONResponse(
             status_code=500,
-            content={"success": False, "error": "Audio analysis failed", "details": str(e)},
+            content={
+                "success": False,
+                "error": "Audio analysis failed",
+                "details": str(e),
+            },
         )
 
     finally:
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
+
 
 @app.post("/generate-accompaniment-from-audio")
 async def generate_accompaniment_from_audio(file: UploadFile = File(...)):
@@ -89,7 +102,7 @@ async def generate_accompaniment_from_audio(file: UploadFile = File(...)):
 
     try:
         print("=" * 60)
-        print("GENERATE ACCOMPANIMENT - STABLE MODE")
+        print("GENERATE ACCOMPANIMENT")
         print("FILE:", file.filename)
         print("=" * 60)
 
@@ -123,13 +136,17 @@ async def generate_accompaniment_from_audio(file: UploadFile = File(...)):
         return FileResponse(
             output_path,
             media_type="audio/midi",
-            filename=f"stable_accompaniment_{request_id}.mid",
+            filename=f"accompaniment_{request_id}.mid",
         )
 
     except ValueError as e:
         return JSONResponse(
             status_code=400,
-            content={"success": False, "error": "Unsupported file type", "details": str(e)},
+            content={
+                "success": False,
+                "error": "Unsupported file type",
+                "details": str(e),
+            },
         )
 
     except Exception as e:
@@ -138,7 +155,7 @@ async def generate_accompaniment_from_audio(file: UploadFile = File(...)):
             status_code=500,
             content={
                 "success": False,
-                "error": "Stable accompaniment generation failed",
+                "error": "Accompaniment generation failed",
                 "details": str(e),
             },
         )
