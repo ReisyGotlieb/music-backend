@@ -117,21 +117,51 @@ def add_drums(drums, start, bar_seconds, bpm, intensity):
     closed_hat = 42
     open_hat = 46
     crash = 49
+    ride = 51
+    low_tom = 45
+    mid_tom = 47
+    high_tom = 50
 
+    # Crash בתחילת קטעים חזקים
     if intensity in ["medium", "full"]:
-        add_note(drums, crash, start, start + 0.08, min(100, v + 15))
+        add_note(drums, crash, start, start + 0.08, min(115, v + 22))
 
+    # Hi-hat / Ride
     for i in range(8):
         t = start + i * (beat / 2)
-        add_note(drums, closed_hat, t, t + 0.03, min(90, v - 10))
+        velocity = min(95, v - 12 + (6 if i % 2 == 0 else 0))
 
-    add_note(drums, kick, start, start + 0.05, min(110, v + 18))
-    add_note(drums, snare, start + beat * 2, start + beat * 2 + 0.05, min(105, v + 8))
+        if intensity == "full":
+            cymbal = ride if i % 2 == 0 else closed_hat
+        else:
+            cymbal = closed_hat
+
+        add_note(drums, cymbal, t, t + 0.035, velocity)
+
+    # Kick pattern
+    add_note(drums, kick, start, start + 0.05, min(115, v + 24))
+    add_note(drums, kick, start + beat * 1.5, start + beat * 1.5 + 0.05, min(105, v + 12))
 
     if intensity == "full":
-        add_note(drums, kick, start + beat * 2.5, start + beat * 2.5 + 0.05, min(105, v + 10))
-        add_note(drums, open_hat, start + beat * 3.5, start + beat * 3.5 + 0.05, min(95, v))
+        add_note(drums, kick, start + beat * 2.5, start + beat * 2.5 + 0.05, min(112, v + 18))
+        add_note(drums, kick, start + beat * 3.5, start + beat * 3.5 + 0.05, min(100, v + 8))
 
+    # Snare
+    add_note(drums, snare, start + beat * 2, start + beat * 2 + 0.05, min(112, v + 15))
+
+    if intensity == "full":
+        add_note(drums, snare, start + beat * 3.75, start + beat * 3.75 + 0.04, min(95, v + 4))
+
+    # Open hat בסוף תיבה
+    if intensity in ["medium", "full"]:
+        add_note(drums, open_hat, start + beat * 3.5, start + beat * 3.5 + 0.06, min(100, v + 5))
+
+    # Fill קצר בסוף קטע חזק
+    if intensity == "full":
+        fill_start = start + beat * 3
+        add_note(drums, high_tom, fill_start, fill_start + 0.05, min(100, v + 8))
+        add_note(drums, mid_tom, fill_start + beat * 0.25, fill_start + beat * 0.25 + 0.05, min(100, v + 6))
+        add_note(drums, low_tom, fill_start + beat * 0.5, fill_start + beat * 0.5 + 0.05, min(105, v + 10))
 def add_bar_arrangement(piano, bass, pad, arp, guitar, strings, choir, item, start, bpm):
     chord = item["chord"]
     intensity = item["intensity"]
