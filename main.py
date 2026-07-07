@@ -31,9 +31,9 @@ def test():
 def save_upload_to_temp(file: UploadFile, content: bytes):
     suffix = os.path.splitext(file.filename or "")[1].lower()
 
-    if suffix not in [".mp3", ".wav"]:
-        raise ValueError("Please upload MP3 or WAV only")
-
+   if suffix not in [".mp3", ".wav", ".webm", ".ogg", ".m4a"]:
+        raise "Please upload MP3, WAV, WEBM, OGG or M4A"
+       
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     temp_file.write(content)
     temp_file.close()
