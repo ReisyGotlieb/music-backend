@@ -1,16 +1,13 @@
 import os
-import subprocess
 import tempfile
-from midi2audio import FluidSynth
+import numpy as np
+import soundfile as sf
+import pretty_midi
 from pydub import AudioSegment
-
-# נתיבי ה-SoundFont (בודק קודם בתיקיית assets ואז בברירת המחדל של השרת)
-SOUNDFONT_PATH = os.path.join(os.path.dirname(__file__), "..", "assets", "default.sf2")
-SYSTEM_SOUNDFONT = "/usr/share/sounds/sf2/FluidR3_GM.sf2"
 
 def render_audio_from_midi(midi_path: str) -> str:
     """
-    מקבל נתיב לקובץ MIDI וממיר אותו לקובץ WAV באמצעות FluidSynth
+    מרנדר קובץ MIDI לאודיו WAV בצורה נקייה ויציבה באמצעות פייתון בלבד (ללא FluidSynth)
     """
     if not os.path.exists(midi_path):
         raise FileNotFoundError(f"MIDI file not found at {midi_path}")
@@ -20,45 +17,50 @@ def render_audio_from_midi(midi_path: str) -> str:
     temp_wav.close()
     
     try:
-        # קביעת ה-SoundFont המתאים לפי מה שקיים בשרת
-        if os.path.exists(SOUNDFONT_PATH):
-            fs = FluidSynth(sound_font=SOUNDFONT_PATH)
-        elif os.path.exists(SYSTEM_SOUNDFONT):
-            fs = FluidSynth(sound_font=SYSTEM_SOUNDFONT)
-        else:
-            print("Warning: No specific soundfont found, using system default.")
-            fs = FluidSynth()
-            
-        fs.midi_to_audio(midi_path, temp_wav_path)
+        # טעינת ה-MIDI באמצעות pretty_midi
+        pm = pretty_midi.PrettyMIDI(midi_path)
+        
+        # סינתזה של ה-MIDI לסיגנל אודיו (קצב דגימה סטנדרטי 44100)
+        # הפונקציה הזו מייצרת סאונד דיגיטלי ישירות מהתווים
+        audio_data = pm.synthesize(fs=44100)
+        
+        # נרמול עוצמת השמע כדי למנוע עיוותים (Clipping)
+        if len(audio_data) > 0:
+            max_val = np.max(np.abs(audio_data))
+            if max_val > 0:
+                audio_data = audio_data / max_val
+                
+        # שמירת האודיו שנוצר לקובץ WAV זמני
+        sf.write(temp_wav_path, audio_data, 44100)
         return temp_wav_path
         
     except Exception as e:
         if os.path.exists(temp_wav_path):
             os.remove(temp_wav_path)
-        raise RuntimeError(f"Failed to render MIDI to audio: {str(e)}")
+        raise RuntimeError(f"Failed to synthesize MIDI to audio: {str(e)}")
 
 
 def mix_vocal_and_accompaniment(vocal_path: str, accompaniment_path: str) -> str:
     """
-    מבצע מיקס: משלב את קול הזמר המקורי יחד עם קובץ הליווי (הפלייבק) שרונדר
+    מערבב את השירה המקורית עם הליווי הדיגיטלי שנוצר
     """
     if not os.path.exists(vocal_path):
         raise FileNotFoundError(f"Vocal file not found at {vocal_path}")
     if not os.path.exists(accompaniment_path):
         raise FileNotFoundError(f"Accompaniment file not found at {accompaniment_path}")
 
-    # טעינת שני קבצי השמע
+    # טעינת הקבצים ב-pydub
     vocal = AudioSegment.from_file(vocal_path)
     backing = AudioSegment.from_file(accompaniment_path)
     
-    # איזון עוצמות בסיסי כדי שהשירה תישמע מעל הליווי
-    backing = backing - 3  # הנמכת הפלייבק ב-3 דציבלים
-    vocal = vocal + 1      # הגברת הווקאל ב-1 דציבל
+    # התאמת עוצמות עדינה
+    backing = backing - 4  # הנמכת הליווי כדי שהשירה תבלוט
+    vocal = vocal + 1      # חיזוק עדין לשירה
     
-    # שילוב האודיו (Overlay) החל מנקודת ההתחלה
+    # שילוב האודיו
     mixed_audio = backing.overlay(vocal, position=0)
     
-    # שמירה כקובץ MP3 זמני באיכות גבוהה (320kbps)
+    # שמירה כ-MP3 באיכות גבוהה
     output_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
     output_path = output_temp.name
     output_temp.close()
