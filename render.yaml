@@ -2,12 +2,5 @@ services:
   - type: web
     name: music-backend
     env: python
-    buildCommand: |
-      # 1. התקנת תוכנות האודיו של השרת
-      apt-get update && apt-get install -y fluidsynth ffmpeg curl
-      # 2. יצירת תיקיית assets והורדה ישירה של ה-SoundFont מהרשת לתוך השרת
-      mkdir -p assets
-      curl -L -o assets/default.sf2 https://github.com/urish/crescendo/raw/master/public/FluidR3_GM.sf2
-      # 3. התקנת חבילות הפייתון
-      pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
