@@ -6,3 +6,4 @@ soundfile
 numpy
 pretty_midi
 mido
+midi2audio
