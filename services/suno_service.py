@@ -10,33 +10,30 @@ async def add_instrumental(
     upload_url: str,
     title: str = "My Song",
     tags: str = (
-        "professional studio accompaniment, "
-        "supportive clean arrangement, "
-        "piano, warm strings, subtle drums, "
-        "follow the original melody, rhythm and phrasing accurately, "
-        "leave musical space for the lead vocal, "
-        "use the complete uploaded melody from beginning to end, "
-        "preserve every musical phrase, "
-        "do not omit or shorten any phrase, "
-        "do not end the arrangement before the original melody is complete, "
-        "follow the full structure of the uploaded audio"
-    ),
+    "professional studio accompaniment, "
+    "strict accompaniment to the uploaded vocal performance, "
+    "preserve the exact timing, tempo, meter and phrase boundaries of the source audio, "
+    "preserve the harmonic context implied by the source vocal, "
+    "follow every pause, entrance, phrase length and structural section, "
+    "do not reinterpret or rewrite the source performance, "
+    "do not change tempo between sections, "
+    "do not add or remove measures, "
+    "accompany the complete source audio from beginning to end, "
+    "supportive piano, warm strings, bass, subtle drums, "
+    "leave space for the original lead vocal"
+),
     negative_tags: str = (
-        "lead melody doubling, "
-        "instrumental melody copying the vocal, "
-        "busy countermelody, "
-        "dense orchestration, "
-        "solo instruments competing with the vocal, "
-        "choir, backing vocals, background vocals, vocal harmonies, "
-        "second voice, doubled vocals, layered vocals, "
-        "call and response, vocal ad-libs, "
-        "heavy drums, heavy metal, distorted vocals, "
-        "truncated ending, "
-        "early ending, "
-        "omitted phrases, "
-        "shortened structure, "
-        "missing melody sections"
-    ),
+    "tempo changes, rubato reinterpretation, "
+    "key changes, modulation, reharmonization, "
+    "melody rewriting, lead melody doubling, "
+    "instrumental melody copying the vocal, "
+    "added measures, removed measures, "
+    "intro extension, outro extension, "
+    "early ending, shortened structure, omitted phrases, "
+    "busy countermelody, dense orchestration, "
+    "solo instruments, choir, backing vocals, "
+    "vocal harmonies, second voice, vocal ad-libs"
+),
 ):
     if not SUNO_API_KEY:
         raise RuntimeError("SUNO_API_KEY is not configured")
