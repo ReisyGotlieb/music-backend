@@ -6,48 +6,43 @@ SUNO_API_KEY = os.getenv("SUNO_API_KEY")
 SUNO_BASE_URL = "https://apibox.erweima.ai"
 
 
+DEFAULT_TAGS = (
+    "Professional studio production using the original lead vocal. "
+    "Preserve the singer's exact vocal timbre, identity, melody, "
+    "phrasing, timing, breaths and emotion. "
+    "Apply gentle, natural pitch correction without changing the voice. "
+    "Add rich piano, warm strings, soft bass and subtle drums. "
+    "Follow the vocal closely with supportive harmonies, no competing melodies. "
+    "Professional vocal mix, EQ, compression, reverb and mastering. "
+    "Deliver the complete song with original vocals and a natural ending."
+)
+
+DEFAULT_NEGATIVE_TAGS = (
+    "instrumental only, missing vocals, replacement singer, "
+    "altered voice, synthetic vocals, re-sung vocals, "
+    "heavy autotune, robotic pitch correction, "
+    "backing vocals, choir, vocal harmonies, doubled vocals, "
+    "vocal ad-libs, changed melody, changed phrasing, "
+    "missing phrases, competing instrumental solos, "
+    "instruments doubling the vocal melody, "
+    "overpowering drums, distorted vocals, "
+    "abrupt ending, truncated ending"
+)
+
 async def add_instrumental(
     upload_url: str,
     title: str = "My Song",
-    tags: str = (
-    "Professional high-end studio production of the uploaded "
-    "original vocal recording. "
-    "Use the original singer's voice as the lead vocal throughout "
-    "the entire song. "
-    "Preserve the original vocal timbre, identity, tone, "
-    "natural expression, phrasing, breaths and emotional delivery. "
-    "Apply only gentle, transparent pitch correction to inaccurate notes, "
-    "while preserving natural pitch transitions and vibrato. "
-    "Keep the original vocal melody, timing and rhythmic phrasing. "
-    "Create a beautiful, rich, emotionally expressive musical arrangement "
-    "built around the existing vocal performance. "
-    "Warm acoustic piano, lush strings, supportive bass, "
-    "subtle percussion and elegant harmonic development. "
-    "Professional vocal mixing, natural EQ, gentle compression, "
-    "subtle reverb, balanced instrumentation and polished mastering. "
-    "Keep the original lead vocal clear, warm, natural "
-    "and prominent in the final mix. "
-    "Preserve every vocal phrase and the complete original song structure. "
-    "Finish naturally after the final vocal phrase."
-),
-
-negative_tags: str = (
-    "voice replacement, new singer, synthetic vocals, "
-    "changed vocal identity, altered vocal timbre, "
-    "re-sung vocals, vocal regeneration, "
-    "heavy autotune, robotic pitch correction, "
-    "unnatural pitch transitions, excessive vocal processing, "
-    "backing vocals, choir, vocal harmonies, "
-    "doubled vocals, layered vocals, vocal ad-libs, "
-    "changed melody, changed phrasing, missing vocal phrases, "
-    "instrumental melody doubling the singer, "
-    "competing instrumental solos, overpowering instruments, "
-    "harsh compression, excessive reverb, distorted vocals, "
-    "abrupt ending, truncated ending, early fade-out"
-),
+    tags: str = DEFAULT_TAGS,
+    negative_tags: str = DEFAULT_NEGATIVE_TAGS,
 ):
     if not SUNO_API_KEY:
         raise RuntimeError("SUNO_API_KEY is not configured")
+
+    if len(negative_tags) > 500:
+        raise ValueError(
+            f"negative_tags exceeds Suno limit: "
+            f"{len(negative_tags)}/500 characters"
+        )
 
     url = f"{SUNO_BASE_URL}/api/v1/generate/add-instrumental"
 
@@ -62,22 +57,12 @@ negative_tags: str = (
         "tags": tags,
         "negativeTags": negative_tags,
 
-        # זמני בשלב ה-POC.
-        # בהמשך נחליף ל-callback endpoint אמיתי אצלנו.
         "callBackUrl": "https://example.com/callback",
 
         "model": "V6",
-
-        # שומרים על הנאמנות הגבוהה למקור
         "audioWeight": 1.0,
-
-        # בניסוי הקודם 0.5 נתן תוצאה מדויקת ומסודרת יותר
         "styleWeight": 0.5,
-
-        # כרגע לא מוסיפים יצירתיות חריגה
         "weirdnessConstraint": 0.0,
-
-        # כרגע משאירים קבוע כדי לא לשנות כמה משתנים יחד
         "variety": 0,
     }
 
