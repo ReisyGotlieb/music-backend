@@ -62,7 +62,10 @@ async def generate_upload_cover(
 
     _validate(title, style, negative_tags, lyrics)
 
-    callback_url = os.getenv("SUNO_CALLBACK_URL")
+   callback_url = os.getenv(
+    "SUNO_CALLBACK_URL",
+    "https://example.com/callback"
+)
 
     if not callback_url:
         raise RuntimeError("SUNO_CALLBACK_URL is not configured")
