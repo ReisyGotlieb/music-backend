@@ -23,6 +23,8 @@ from services.suno_service import (
 from services.suno_cover_service import (
     generate_upload_cover,
     get_cover_generation_details,
+    DEFAULT_COVER_STYLE,
+    DEFAULT_COVER_NEGATIVE_TAGS,
 )
 
 # from services.voice_service import router as voice_router
@@ -35,7 +37,7 @@ from services.openai_service import analyze_song
 
 app = FastAPI(
     title="Music Backend",
-    version="2.2.1",
+    version="2.2.2",
 )
 
 # app.include_router(voice_router)
@@ -61,6 +63,7 @@ class InstrumentalRequest(BaseModel):
 
     tags: str = Field(
         default=DEFAULT_TAGS,
+        max_length=1000,
         description="Positive style prompt for Suno",
     )
 
@@ -104,8 +107,25 @@ class InstrumentalRequest(BaseModel):
 
 class UploadCoverRequest(BaseModel):
     upload_url: str
+
     title: str = "My Song"
-    lyrics: str = ""
+
+    lyrics: str = Field(
+        default="",
+        max_length=5000,
+    )
+
+    style: str | None = Field(
+        default=None,
+        max_length=1000,
+        description="Optional custom Cover style",
+    )
+
+    negative_tags: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Optional custom negative tags",
+    )
 
     persona_id: str | None = None
     persona_model: str | None = None
@@ -138,8 +158,13 @@ class UploadCoverRequest(BaseModel):
 class AnalyzeSongRequest(BaseModel):
     upload_url: str = Field(
         ...,
-        description="Public HTTPS URL of an MP3 or WAV recording"
+        description="Public HTTPS URL of an audio recording",
     )
+
+
+class AutoSongRequest(BaseModel):
+    upload_url: str
+    title: str | None = None
 
 
 # =====================================
@@ -175,6 +200,18 @@ async def create_instrumental(
             "success": True,
             "data": result,
         }
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e),
+        )
+
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=e.response.text,
+        )
 
     except Exception as e:
         raise HTTPException(
@@ -224,6 +261,12 @@ async def song_status(task_id: str):
             "success": True,
             "data": result,
         }
+
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=e.response.text,
+        )
 
     except Exception as e:
         raise HTTPException(
@@ -351,13 +394,37 @@ async def upload_cover_endpoint(
             upload_url=request.upload_url,
             title=request.title,
             lyrics=request.lyrics,
+            style=(
+                request.style
+                if request.style is not None
+                else DEFAULT_COVER_STYLE
+            ),
+            negative_tags=(
+                request.negative_tags
+                if request.negative_tags is not None
+                else DEFAULT_COVER_NEGATIVE_TAGS
+            ),
             persona_id=request.persona_id,
-            persona_model=request.persona_model,
+            persona_model=(
+                request.persona_model or "voice_persona"
+            ),
         )
 
         return result
 
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e),
+        )
+
     except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=e.response.text,
+        )
+
+    except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=str(e),
@@ -378,6 +445,12 @@ async def cover_generation_details_endpoint(
         )
 
         return result
+
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=e.response.text,
+        )
 
     except Exception as e:
         raise HTTPException(
@@ -413,7 +486,10 @@ async def analyze_song_endpoint(
     except httpx.HTTPStatusError as e:
         raise HTTPException(
             status_code=502,
-            detail=f"External API error: {e.response.status_code}",
+            detail=(
+                f"External API error: "
+                f"{e.response.status_code}"
+            ),
         )
 
     except Exception as e:
@@ -423,15 +499,14 @@ async def analyze_song_endpoint(
         )
 
 
-
-
-class AutoSongRequest(BaseModel):
-    upload_url: str
-    title: str | None = None
-
+# =====================================
+# CREATE SONG AUTO
+# =====================================
 
 @app.post("/create-song-auto")
-async def create_song_auto(request: AutoSongRequest):
+async def create_song_auto(
+    request: AutoSongRequest
+):
     try:
         analysis = await analyze_song(
             upload_url=request.upload_url
@@ -439,12 +514,17 @@ async def create_song_auto(request: AutoSongRequest):
 
         lyrics = analysis["lyrics"]
 
+        # OpenAI returns only title and lyrics.
+        # Suno owns all arrangement prompts.
+
         result = await add_instrumental(
             upload_url=request.upload_url,
-            title=request.title or analysis["title"],
+            title=(
+                request.title or analysis["title"]
+            ),
             lyrics=lyrics,
-            tags=analysis["tags"],
-            negative_tags=analysis["negative_tags"],
+            tags=DEFAULT_TAGS,
+            negative_tags=DEFAULT_NEGATIVE_TAGS,
         )
 
         return {
@@ -453,9 +533,20 @@ async def create_song_auto(request: AutoSongRequest):
             "generation": result,
         }
 
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e),
+        )
+
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=e.response.text,
+        )
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=str(e),
         )
-
