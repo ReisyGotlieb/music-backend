@@ -1,224 +1,394 @@
 
 import os
+import json
+import base64
+import asyncio
+import tempfile
+import logging
+from pathlib import Path
+from urllib.parse import urlparse
+
 import httpx
 
 
-SUNO_API_KEY = os.getenv("SUNO_API_KEY")
-SUNO_BASE_URL = "https://apibox.erweima.ai"
+logger = logging.getLogger(__name__)
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-audio")
+OPENAI_URL = "https://api.openai.com/v1/chat/completions"
+
+MAX_AUDIO_BYTES = 20 * 1024 * 1024
+MAX_ATTEMPTS = 2
 
 
-DEFAULT_TAGS = (
-    "ABSOLUTE PRIORITY: Use the EXACT original uploaded vocal "
-    "recording as the sole lead vocal track in the final mix. "
-    "Preserve its authentic waveform, unique vocal fingerprint, "
-    "tone color, timbre, formants, resonance, texture, pitch "
-    "contours, intonation, vibrato, microtonal nuances, dynamics, "
-    "breaths, accent, pronunciation, consonants, vowels, syllables, "
-    "lyrics, melody, phrasing, timing and emotion with total fidelity. "
-    "Retain every original sung phrase, verse, chorus and ending "
-    "in full and in order. Vocal authenticity takes precedence "
-    "over all production decisions. Apply only gentle background "
-    "noise reduction and transparent minimal EQ. Build a beautiful, "
-    "full, rich instrumental arrangement with piano, warm strings, "
-    "bass and rhythmic drums, precisely supporting the original "
-    "vocal entrances, pauses and tempo. Keep the singer clear "
-    "and dominant, with elegant instrumental intro, transitions "
-    "and outro. Never truncate the final sung phrase."
-)
+SYSTEM_PROMPT = """
+You are an expert audio-first transcription specialist for Hebrew,
+Yiddish, Hasidic, Ashkenazi, English and multilingual songs.
+
+Listen carefully to the ENTIRE recording, from the first audible
+sung sound through the final sung sound.
+
+ABSOLUTE PRIORITY:
+Transcribe exactly what the singer ACTUALLY sings.
+The original audio is the ONLY authority.
+
+PHONETIC FIDELITY:
+- Write ALL sung lyrics in LATIN LETTERS ONLY.
+- Transcribe actual sounds, not standard spelling.
+- Preserve every audible vowel, consonant, syllable,
+  diphthong, word ending and stressed syllable.
+- Preserve the singer's actual dialect and accent.
+- Accept Hasidic, Litvish, Yerushalmi, Vizhnitz,
+  Ger, Breslov, Sephardi, Yemenite, Yiddish,
+  mixed and individual pronunciations.
+- Never assume a dialect before listening.
+- Never normalize pronunciation to another dialect.
+- Never correct or modernize the singer's pronunciation.
+- Use KH for an audible guttural Hebrew Chet,
+  never English CH.
+- Choose Latin spelling that best reflects the audio.
+
+RELIGIOUS AND LITURGICAL TEXT:
+- Recognizing a prayer, blessing, Psalm, biblical verse
+  or traditional song must NEVER determine pronunciation.
+- Never reconstruct phonetic spelling from Siddur,
+  Tanakh, Hebrew spelling or memorized lyrics.
+- Never replace an audible vowel or consonant with
+  the expected pronunciation of a familiar word.
+- Determine the audible sounds independently of
+  the underlying religious text.
+- The recording always overrides religious knowledge.
+
+UNCLEAR WORD RECOGNITION:
+- Use audible evidence, linguistic context, authentic
+  vocabulary, grammar and repeated occurrences to
+  recognize unclear words when sufficiently supported.
+- This applies to Hebrew, Yiddish, English and all
+  other languages.
+- Context may identify an unclear word but must NEVER
+  overwrite clearly audible pronunciation.
+- Never invent nonsense words or missing lyrics.
+- Never insert words omitted by the singer.
+- Never silently correct grammar or pronunciation.
+- If genuinely unintelligible, write [Unclear].
+
+REPEATED WORDS:
+- Listen independently to every occurrence.
+- Preserve actual pronunciation differences.
+- Never normalize to a dominant or standard form.
+- Use other repetitions only to clarify unclear audio,
+  without overriding sounds that are clearly heard.
+
+COMPLETE TRANSCRIPTION:
+- Include EVERY sung word, syllable, line and phrase.
+- Include ALL repeated verses, choruses and phrases.
+- Never summarize, shorten or merge repetitions.
+- Preserve the exact original order.
+- Include the full beginning and ending.
+- Never invent additional lyrics or vocal sections.
+
+WORDLESS SINGING:
+- Transcribe audible syllables such as Na, La, Ma,
+  Du, Oy, Ay and Lai exactly as heard.
+- Preserve all repetitions.
+- Do not invent words for humming.
+- Pure closed-mouth humming without identifiable
+  syllables may have empty lyrics.
+- Mixed words and humming must both be represented.
+
+SONG STRUCTURE:
+- Use [Verse 1], [Verse 2], [Chorus], [Bridge],
+  [Verse 1 Repeat] or similar labels when musically
+  supported by the actual recording.
+- Use melody, phrasing and repetition to identify
+  sections, not the meaning of religious text.
+- Put each sung phrase on a separate line.
+- Use blank lines between sections.
+- Write the complete lyrics of every repeated section.
+- Do not invent instrumental introductions, transitions
+  or outros that are absent from the recording.
+
+TITLE:
+- Return a short meaningful title.
+- Prefer a recognizable sung phrase.
+- Hebrew script is allowed in the title.
+- For wordless recordings use a neutral title.
+
+OUTPUT:
+Return ONLY valid JSON with exactly two string fields:
+{"title":"","lyrics":""}
+
+No Markdown, explanations or extra fields.
+All sung lyrics must use Latin letters.
+Maximum lyrics length: 5000 characters.
+Never silently truncate the original transcription.
+
+FINAL CHECK:
+Verify phonetic fidelity, actual dialect, unclear words,
+all repetitions, wordless syllables, full beginning
+and complete ending before returning the result.
+"""
 
 
-DEFAULT_NEGATIVE_TAGS = (
-    "AI vocal regeneration, re-singing, replacement voice, "
-    "voice cloning, altered vocal identity, changed timbre, "
-    "formant shifting, pitch correction, autotune, altered "
-    "intonation, vibrato or pitch contours, changed pronunciation, "
-    "accent, vowels, consonants or lyrics, missing words, "
-    "skipped verses, time stretching, vocal effects, choir, "
-    "backing vocals, harmonies, doubled vocals, extra singers, "
-    "instrumental replacement of vocals, overpowering instruments, "
-    "aggressive denoising, cut vocals, truncated ending"
-)
+async def convert_audio_to_wav(audio_bytes: bytes) -> bytes:
+    """Convert browser audio formats to 24 kHz mono WAV."""
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        input_path = Path(temp_dir) / "input_audio"
+        output_path = Path(temp_dir) / "output.wav"
+
+        input_path.write_bytes(audio_bytes)
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                "ffmpeg",
+                "-hide_banner",
+                "-loglevel", "error",
+                "-nostdin",
+                "-y",
+                "-i", str(input_path),
+                "-vn",
+                "-ac", "1",
+                "-ar", "24000",
+                "-c:a", "pcm_s16le",
+                str(output_path),
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                "FFmpeg is not installed on the server"
+            ) from exc
+
+        try:
+            _, stderr = await asyncio.wait_for(
+                process.communicate(),
+                timeout=90,
+            )
+        except asyncio.TimeoutError as exc:
+            process.kill()
+            await process.communicate()
+            raise ValueError(
+                "Audio conversion timed out"
+            ) from exc
+
+        if process.returncode != 0 or not output_path.exists():
+            details = stderr.decode(
+                "utf-8",
+                errors="replace",
+            )[:500]
+            raise ValueError(
+                f"Audio conversion failed: {details}"
+            )
+
+        wav_bytes = output_path.read_bytes()
+
+        if len(wav_bytes) > MAX_AUDIO_BYTES:
+            raise ValueError(
+                "Converted WAV exceeds 20 MB limit"
+            )
+
+        return wav_bytes
 
 
-DEFAULT_INSTRUMENTAL_STYLE = (
-    "Professional studio instrumental accompaniment, "
-    "warm piano, expressive strings, gentle rhythmic drums, "
-    "faithful to the uploaded melody and musical phrasing, "
-    "preserve the original song structure and natural timing, "
-    "supportive arrangement with no competing lead melody"
-)
+def parse_song_response(result: dict) -> dict:
+    """Parse and validate transcription response."""
 
+    choices = result.get("choices") or []
 
-DEFAULT_INSTRUMENTAL_NEGATIVE_TAGS = (
-    "vocals, lead singer, backing vocals, choir, "
-    "vocal harmonies, second voice, doubled vocals, "
-    "busy countermelody, instruments doubling the vocal melody, "
-    "heavy drums, truncated ending"
-)
+    if not choices:
+        raise ValueError("OpenAI returned no choices")
 
+    choice = choices[0]
+    finish_reason = choice.get("finish_reason")
 
-def _callback_url():
-    return (
-        os.getenv("SUNO_CALLBACK_URL")
-        or "https://example.com/callback"
-    )
-
-
-def _check_length(name: str, value: str, limit: int):
-    if not isinstance(value, str):
-        raise ValueError(f"{name} must be a string")
-
-    if len(value) > limit:
+    if finish_reason == "length":
         raise ValueError(
-            f"{name} exceeds Suno limit: "
-            f"{len(value)}/{limit} characters"
+            "OpenAI response was truncated"
         )
 
-
-async def add_instrumental(
-    upload_url: str,
-    title: str = "My Song",
-    tags: str = DEFAULT_TAGS,
-    negative_tags: str = DEFAULT_NEGATIVE_TAGS,
-    lyrics: str | None = None,
-):
-    if not SUNO_API_KEY:
-        raise RuntimeError(
-            "SUNO_API_KEY is not configured"
+    if finish_reason not in (None, "stop"):
+        raise ValueError(
+            f"OpenAI finished unexpectedly: {finish_reason}"
         )
 
-    _check_length("tags", tags, 1000)
-    _check_length("negative_tags", negative_tags, 500)
+    message = choice.get("message") or {}
+    content = message.get("content")
 
-    if lyrics is not None:
-        _check_length("lyrics", lyrics, 5000)
+    if not isinstance(content, str):
+        raise ValueError(
+            "OpenAI returned no text content"
+        )
 
-    url = f"{SUNO_BASE_URL}/api/v1/generate/add-instrumental"
+    content = content.strip()
 
-    headers = {
-        "Authorization": f"Bearer {SUNO_API_KEY}",
-        "Content-Type": "application/json",
+    if content.startswith("```"):
+        parts = content.split("\n", 1)
+
+        if len(parts) == 2:
+            content = parts[1].rsplit(
+                "```", 1
+            )[0].strip()
+
+    try:
+        song = json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            "OpenAI returned invalid JSON"
+        ) from exc
+
+    if not isinstance(song, dict):
+        raise ValueError(
+            "OpenAI JSON must be an object"
+        )
+
+    required_fields = ("title", "lyrics")
+
+    for field in required_fields:
+        if not isinstance(song.get(field), str):
+            raise ValueError(
+                f"OpenAI response missing valid field: {field}"
+            )
+
+    if not song["title"].strip():
+        song["title"] = "My Melody"
+
+    # Empty lyrics are valid for pure humming.
+
+    if len(song["lyrics"]) > 5000:
+        raise ValueError(
+            "Lyrics exceed 5000 characters"
+        )
+
+    return {
+        field: song[field]
+        for field in required_fields
     }
 
-    payload = {
-        "uploadUrl": upload_url,
-        "title": title,
-        "tags": tags,
-        "negativeTags": negative_tags,
-        "callBackUrl": _callback_url(),
-        "model": "V6",
-        "audioWeight": 1.0,
-        "styleWeight": 0.3,
-        "weirdnessConstraint": 0.0,
-        "variety": 0,
-    }
 
-    if lyrics and lyrics.strip():
-        payload["lyrics"] = lyrics.strip()
+async def analyze_song(upload_url: str) -> dict:
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        response = await client.post(
-            url,
-            headers=headers,
-            json=payload,
-        )
-
-    response.raise_for_status()
-    result = response.json()
-
-    if result.get("code") != 200:
+    if not OPENAI_API_KEY:
         raise RuntimeError(
-            f"Suno Add Instrumental failed: {result}"
+            "OPENAI_API_KEY is not configured"
         )
 
-    return result
+    parsed = urlparse(upload_url)
 
+    if parsed.scheme != "https":
+        raise ValueError(
+            "upload_url must use HTTPS"
+        )
 
-async def get_generation_details(task_id: str):
-    if not SUNO_API_KEY:
+    allowed_host = os.getenv("AUDIO_PUBLIC_HOST")
+
+    if not allowed_host:
         raise RuntimeError(
-            "SUNO_API_KEY is not configured"
+            "AUDIO_PUBLIC_HOST is not configured"
         )
 
-    url = f"{SUNO_BASE_URL}/api/v1/generate/record-info"
-
-    headers = {
-        "Authorization": f"Bearer {SUNO_API_KEY}",
-    }
-
-    params = {
-        "taskId": task_id
-    }
-
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        response = await client.get(
-            url,
-            headers=headers,
-            params=params,
+    if parsed.hostname != allowed_host:
+        raise ValueError(
+            "Audio URL host is not allowed"
         )
 
-    response.raise_for_status()
-    result = response.json()
+    async with httpx.AsyncClient(
+        timeout=120.0,
+        follow_redirects=False,
+    ) as client:
 
-    if result.get("code") != 200:
-        raise RuntimeError(
-            f"Suno status request failed: {result}"
+        response = await client.get(upload_url)
+        response.raise_for_status()
+
+        audio_bytes = response.content
+
+        if len(audio_bytes) > MAX_AUDIO_BYTES:
+            raise ValueError(
+                "Audio file exceeds 20 MB limit"
+            )
+
+        audio_bytes = await convert_audio_to_wav(
+            audio_bytes
         )
 
-    return result
+        audio_base64 = base64.b64encode(
+            audio_bytes
+        ).decode("utf-8")
 
+        payload = {
+            "model": OPENAI_MODEL,
+            "modalities": ["text"],
+            "messages": [
+                {
+                    "role": "system",
+                    "content": SYSTEM_PROMPT,
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": (
+                                "Transcribe this complete song recording "
+                                "and return exactly two JSON string fields: "
+                                "title and lyrics. Preserve the singer's "
+                                "actual pronunciation and all repetitions. "
+                                "The audio may contain words, wordless "
+                                "syllables, humming or a mixture. "
+                                "Do not invent lyrics for humming. "
+                                "Empty lyrics are valid for pure humming."
+                            ),
+                        },
+                        {
+                            "type": "input_audio",
+                            "input_audio": {
+                                "data": audio_base64,
+                                "format": "wav",
+                            },
+                        },
+                    ],
+                },
+            ],
+        }
 
-async def upload_cover(
-    upload_url: str,
-    title: str = "My Song Cover",
-    style: str = DEFAULT_INSTRUMENTAL_STYLE,
-):
-    if not SUNO_API_KEY:
-        raise RuntimeError(
-            "SUNO_API_KEY is not configured"
-        )
+        last_error = None
 
-    _check_length("style", style, 1000)
-    _check_length(
-        "negative_tags",
-        DEFAULT_INSTRUMENTAL_NEGATIVE_TAGS,
-        500,
+        for attempt in range(1, MAX_ATTEMPTS + 1):
+
+            try:
+                api_response = await client.post(
+                    OPENAI_URL,
+                    headers={
+                        "Authorization": (
+                            f"Bearer {OPENAI_API_KEY}"
+                        ),
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                    timeout=240.0,
+                )
+
+                api_response.raise_for_status()
+
+                result = api_response.json()
+
+                return parse_song_response(result)
+
+            except ValueError as exc:
+                last_error = exc
+
+                logger.warning(
+                    "OpenAI transcription validation failed "
+                    "on attempt %s/%s: %s",
+                    attempt,
+                    MAX_ATTEMPTS,
+                    str(exc),
+                )
+
+                if attempt < MAX_ATTEMPTS:
+                    continue
+
+    raise RuntimeError(
+        "OpenAI could not return a valid song analysis "
+        f"after {MAX_ATTEMPTS} attempts: {last_error}"
     )
-
-    url = f"{SUNO_BASE_URL}/api/v1/generate/upload-cover"
-
-    headers = {
-        "Authorization": f"Bearer {SUNO_API_KEY}",
-        "Content-Type": "application/json",
-    }
-
-    payload = {
-        "uploadUrl": upload_url,
-        "title": title,
-        "style": style,
-        "negativeTags": DEFAULT_INSTRUMENTAL_NEGATIVE_TAGS,
-        "instrumental": True,
-        "model": "V6",
-        "callBackUrl": _callback_url(),
-        "audioWeight": 1.0,
-        "styleWeight": 0.5,
-        "weirdnessConstraint": 0.0,
-        "variety": 0,
-    }
-
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        response = await client.post(
-            url,
-            headers=headers,
-            json=payload,
-        )
-
-    response.raise_for_status()
-    result = response.json()
-
-    if result.get("code") != 200:
-        raise RuntimeError(
-            f"Suno Instrumental Cover failed: {result}"
-        )
-
-    return result
