@@ -2,42 +2,50 @@
 import os
 import httpx
 
-
 SUNO_API_KEY = os.getenv("SUNO_API_KEY")
 SUNO_BASE_URL = "https://apibox.erweima.ai"
 
-
 DEFAULT_COVER_STYLE = (
-    "ABSOLUTE PRIORITY: Preserve the EXACT ORIGINAL uploaded "
-    "lead vocal recording and singer's UNIQUE VOCAL FINGERPRINT. "
-    "Keep 100% of the original voice identity, timbre, formants, "
-    "resonance, texture, accent, pronunciation, vibrato, breaths, "
-    "emotion, melody, lyrics, phrasing and timing. "
-    "NEVER regenerate, replace, imitate, resynthesize or re-sing "
-    "the voice. Use the AUTHENTIC ORIGINAL vocal audio unchanged. "
-    "Preserve every note, syllable, pause and natural imperfection. "
-    "NO pitch correction unless absolutely essential and inaudible. "
-    "Build rich professional piano, strings, bass and rhythmic "
-    "drums AROUND the vocal, following its exact timing and melody. "
-    "Original lead vocal always dominant. No additional voices. "
-    "Transparent studio mixing, subtle EQ, compression and reverb. "
-    "Keep the COMPLETE original performance and natural ending. "
-    "VOCAL AUTHENTICITY OVERRIDES ALL PRODUCTION ENHANCEMENTS."
+    "ABSOLUTE PRIORITY: Preserve the EXACT ORIGINAL uploaded lead vocal "
+    "recording, unique voice identity, timbre, formants, resonance, accent, "
+    "pronunciation, pitch, melody, vibrato, breaths, emotion, phrasing and "
+    "timing. Never regenerate, replace, imitate, resynthesize or re-sing. "
+    "Keep EVERY original word, phrase, verse, chorus and final sustained "
+    "note, in full and in order. Build a rich supporting arrangement with "
+    "piano, warm strings, bass and steady rhythmic drums around the voice. "
+    "Keep the lead vocal dominant; no other voices or melody doubling. "
+    "Only minimal transparent EQ and compression. Optional instrumental "
+    "intro and outro must not replace vocals. End naturally AFTER the full "
+    "last vocal phrase, never mid-word or mid-phrase. VOCAL AUTHENTICITY "
+    "OVERRIDES PRODUCTION."
 )
 
 DEFAULT_COVER_NEGATIVE_TAGS = (
-    "instrumental only, missing vocals, replacement singer, "
-    "altered voice, synthetic vocals, re-sung vocals, "
-    "autotune, robotic voice, backing vocals, choir, "
-    "vocal harmonies, doubled vocals, vocal ad-libs, "
-    "changed melody, changed phrasing, missing lyrics, "
-    "missing phrases, competing melodies, "
-    "instruments doubling lead vocal, heavy drums, "
-    "distorted vocals, abrupt ending, truncated ending, "
-    "premature ending, cut-off vocals, incomplete song, "
-    "missing final verse, missing final chorus, "
-    "cut-off words, unfinished phrases, early fade-out"
+    "instrumental only, missing vocals, replacement singer, synthetic "
+    "vocals, re-sung vocals, voice conversion, autotune, pitch correction, "
+    "formant shifting, altered pronunciation, changed melody, changed "
+    "phrasing, missing lyrics, skipped verses, choir, backing vocals, "
+    "harmonies, doubled vocals, extra singers, vocal ad-libs, competing "
+    "melodies, instruments doubling vocals, heavy drums, distorted vocals, "
+    "abrupt ending, truncated ending, premature ending, cut-off words, "
+    "early fade-out"
 )
+
+
+def _validate(title: str, style: str, negative_tags: str, lyrics: str) -> None:
+    for name, value, limit in (
+        ("style", style, 1000),
+        ("negative_tags", negative_tags, 500),
+        ("lyrics", lyrics, 5000),
+    ):
+        if not isinstance(value, str) or len(value) > limit:
+            raise ValueError(
+                f"{name} exceeds limit or is not a string: "
+                f"{len(value) if isinstance(value, str) else 'invalid'}/{limit}"
+            )
+
+    if not title.strip():
+        raise ValueError("title must not be empty")
 
 
 async def generate_upload_cover(
@@ -52,24 +60,12 @@ async def generate_upload_cover(
     if not SUNO_API_KEY:
         raise RuntimeError("SUNO_API_KEY is not configured")
 
-    if len(negative_tags) > 500:
-        raise ValueError(
-            f"negative_tags exceeds Suno limit: "
-            f"{len(negative_tags)}/500 characters"
-        )
+    _validate(title, style, negative_tags, lyrics)
 
-    if len(style) > 1000:
-        raise ValueError(
-            f"style exceeds Suno limit: "
-            f"{len(style)}/1000 characters"
-        )
+    callback_url = os.getenv("SUNO_CALLBACK_URL")
 
-    url = f"{SUNO_BASE_URL}/api/v1/generate/upload-cover"
-
-    headers = {
-        "Authorization": f"Bearer {SUNO_API_KEY}",
-        "Content-Type": "application/json",
-    }
+    if not callback_url:
+        raise RuntimeError("SUNO_CALLBACK_URL is not configured")
 
     payload = {
         "uploadUrl": upload_url,
@@ -77,10 +73,7 @@ async def generate_upload_cover(
         "style": style,
         "negativeTags": negative_tags,
         "instrumental": False,
-        "callBackUrl": os.getenv(
-            "SUNO_CALLBACK_URL",
-            "https://example.com/callback"
-        ),
+        "callBackUrl": callback_url,
         "model": "V6",
         "audioWeight": 1.0,
         "styleWeight": 0.0,
@@ -94,11 +87,13 @@ async def generate_upload_cover(
     if persona_id:
         payload["personaId"] = persona_id
         payload["personaModel"] = persona_model
-        
+
     async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.post(
-            url,
-            headers=headers,
+            f"{SUNO_BASE_URL}/api/v1/generate/upload-cover",
+            headers={
+                "Authorization": f"Bearer {SUNO_API_KEY}"
+            },
             json=payload,
         )
 
@@ -113,26 +108,17 @@ async def generate_upload_cover(
     return result
 
 
-
 async def get_cover_generation_details(task_id: str):
     if not SUNO_API_KEY:
         raise RuntimeError("SUNO_API_KEY is not configured")
 
-    url = f"{SUNO_BASE_URL}/api/v1/generate/record-info"
-
-    headers = {
-        "Authorization": f"Bearer {SUNO_API_KEY}",
-    }
-
-    params = {
-        "taskId": task_id
-    }
-
     async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.get(
-            url,
-            headers=headers,
-            params=params,
+            f"{SUNO_BASE_URL}/api/v1/generate/record-info",
+            headers={
+                "Authorization": f"Bearer {SUNO_API_KEY}"
+            },
+            params={"taskId": task_id},
         )
 
     response.raise_for_status()
@@ -156,4 +142,3 @@ async def upload_cover(
         title=title,
         style=style,
     )
-    return result
