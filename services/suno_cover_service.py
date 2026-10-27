@@ -33,9 +33,11 @@ DEFAULT_COVER_NEGATIVE_TAGS = (
     "changed melody, changed phrasing, missing lyrics, "
     "missing phrases, competing melodies, "
     "instruments doubling lead vocal, heavy drums, "
-    "distorted vocals, abrupt ending, truncated ending"
+    "distorted vocals, abrupt ending, truncated ending, "
+    "premature ending, cut-off vocals, incomplete song, "
+    "missing final verse, missing final chorus, "
+    "cut-off words, unfinished phrases, early fade-out"
 )
-
 
 
 async def generate_upload_cover(
