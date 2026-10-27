@@ -53,7 +53,10 @@ def _check_length(name: str, value: str, limit: int):
 
 
 def _callback_url():
-    url = os.getenv("SUNO_CALLBACK_URL")
+    return os.getenv(
+        "SUNO_CALLBACK_URL",
+        "https://example.com/callback"
+    )
 
     if not url:
         raise RuntimeError(
