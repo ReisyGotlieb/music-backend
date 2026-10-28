@@ -1,4 +1,3 @@
-
 import os
 import httpx
 
@@ -9,37 +8,35 @@ SUNO_BASE_URL = "https://apibox.erweima.ai"
 
 DEFAULT_COVER_STYLE = (
     "ABSOLUTE PRIORITY: Preserve the EXACT ORIGINAL uploaded "
-    "lead vocal recording and singer's UNIQUE VOCAL FINGERPRINT. "
-    "Keep 100% of the original voice identity, timbre, formants, "
-    "resonance, texture, accent, pronunciation, vibrato, breaths, "
-    "emotion, melody, lyrics, phrasing and timing. "
-    "NEVER regenerate, replace, imitate, resynthesize or re-sing "
-    "the voice. Use the AUTHENTIC ORIGINAL vocal audio unchanged. "
-    "Preserve every note, syllable, pause and natural imperfection. "
-    "NO pitch correction, autotune, formant shifting or time stretching. "
-    "Build rich professional piano, strings, bass and rhythmic "
-    "drums AROUND the vocal, following its exact timing and melody. "
-    "Original lead vocal always dominant. No additional voices. "
-    "Use only transparent minimal mixing. "
-    "Keep EVERY original word, phrase, verse, chorus and final note. "
-    "Never omit, shorten, replace or truncate any sung passage. "
-    "Optional instrumental intro and outro must not replace vocals. "
-    "End naturally AFTER the complete final vocal phrase. "
-    "VOCAL AUTHENTICITY OVERRIDES ALL PRODUCTION ENHANCEMENTS."
+    "lead vocal and singer's UNIQUE VOCAL FINGERPRINT: identity, "
+    "timbre, formants, resonance, accent, pronunciation, pitch, "
+    "vibrato, breaths, emotion, melody, phrasing and timing. "
+    "Never regenerate, imitate, replace or re-sing the voice. "
+    "Gently remove background hiss, hum, room noise and unwanted "
+    "artifacts. Improve vocal clarity with transparent studio EQ "
+    "and light compression, without changing vocal character. "
+    "Preserve natural texture, imperfections and expression. "
+    "Build rich professional piano, warm strings, bass and steady "
+    "rhythmic drums around the vocal, following its exact timing. "
+    "Keep the original singer clear, natural and dominant. "
+    "No additional voices or competing melodies. "
+    "Keep EVERY word, repetition, verse, chorus and final note. "
+    "Never shorten or truncate vocals. Optional intro and outro "
+    "must not replace singing. End after the COMPLETE final phrase. "
+    "VOCAL AUTHENTICITY OVERRIDES PRODUCTION."
 )
 
 
 DEFAULT_COVER_NEGATIVE_TAGS = (
     "instrumental only, missing vocals, replacement singer, "
-    "altered voice, synthetic vocals, re-sung vocals, "
-    "autotune, pitch correction, robotic voice, "
-    "backing vocals, choir, vocal harmonies, doubled vocals, "
-    "vocal ad-libs, changed melody, changed phrasing, "
-    "missing lyrics, missing phrases, skipped verses, "
-    "competing melodies, instruments doubling lead vocal, "
-    "heavy drums, distorted vocals, abrupt ending, "
-    "truncated ending, premature ending, cut-off vocals, "
-    "cut-off words, unfinished phrases, early fade-out"
+    "AI vocals, re-sung vocals, synthetic voice, changed timbre, "
+    "altered formants, autotune, pitch correction, robotic voice, "
+    "changed accent, pronunciation or melody, missing lyrics, "
+    "skipped verses, choir, backing vocals, harmonies, doubled "
+    "vocals, extra singers, competing melodies, heavy drums, "
+    "distortion, metallic artifacts, aggressive denoising, "
+    "background hiss, hum, room noise, abrupt ending, "
+    "truncated vocals, cut-off words, early fade-out"
 )
 
 
@@ -84,16 +81,9 @@ async def generate_upload_cover(
     persona_model: str = "voice_persona",
 ):
     if not SUNO_API_KEY:
-        raise RuntimeError(
-            "SUNO_API_KEY is not configured"
-        )
+        raise RuntimeError("SUNO_API_KEY is not configured")
 
-    _validate(
-        title,
-        style,
-        negative_tags,
-        lyrics,
-    )
+    _validate(title, style, negative_tags, lyrics)
 
     url = f"{SUNO_BASE_URL}/api/v1/generate/upload-cover"
 
@@ -143,9 +133,7 @@ async def generate_upload_cover(
 
 async def get_cover_generation_details(task_id: str):
     if not SUNO_API_KEY:
-        raise RuntimeError(
-            "SUNO_API_KEY is not configured"
-        )
+        raise RuntimeError("SUNO_API_KEY is not configured")
 
     url = f"{SUNO_BASE_URL}/api/v1/generate/record-info"
 
@@ -153,9 +141,7 @@ async def get_cover_generation_details(task_id: str):
         "Authorization": f"Bearer {SUNO_API_KEY}",
     }
 
-    params = {
-        "taskId": task_id
-    }
+    params = {"taskId": task_id}
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.get(
