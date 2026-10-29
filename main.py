@@ -1,3 +1,10 @@
+from services.suno_service import (
+    add_instrumental,
+    upload_cover as generate_instrumental_playback,
+    get_generation_details,
+    DEFAULT_TAGS,
+    DEFAULT_NEGATIVE_TAGS,
+)
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
