@@ -111,7 +111,7 @@ SONG STRUCTURE:
 TITLE:
 - Return a short meaningful title.
 - Prefer a recognizable sung phrase.
-- Hebrew script is allowed in the title.
+- If the song is in Hebrew, the title will be written in Hebrew script.
 - For wordless recordings use a neutral title.
 
 OUTPUT:
