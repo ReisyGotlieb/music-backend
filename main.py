@@ -195,12 +195,9 @@ async def create_instrumental(
     request: InstrumentalRequest
 ):
     try:
-        result = await add_instrumental(
+        result = await generate_instrumental_playback(
             upload_url=request.upload_url,
             title=request.title,
-            tags=request.tags,
-            negative_tags=request.negative_tags,
-            lyrics=request.lyrics,
         )
 
         return {
@@ -225,7 +222,6 @@ async def create_instrumental(
             status_code=500,
             detail=str(e),
         )
-
 
 # =====================================
 # COVER (DISABLED)
