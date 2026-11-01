@@ -6,38 +6,42 @@ SUNO_API_KEY = os.getenv("SUNO_API_KEY")
 SUNO_BASE_URL = "https://apibox.erweima.ai"
 
 
+
 DEFAULT_COVER_STYLE = (
-    "ABSOLUTE PRIORITY: Preserve the EXACT ORIGINAL uploaded "
-    "lead vocal and singer's UNIQUE VOCAL FINGERPRINT: identity, "
-    "timbre, formants, resonance, accent, pronunciation, pitch, "
-    "vibrato, breaths, emotion, melody, phrasing and timing. "
-    "Never regenerate, imitate, replace or re-sing the voice. "
-    "Gently remove background hiss, hum, room noise and unwanted "
-    "artifacts. Improve vocal clarity with transparent studio EQ "
-    "and light compression, without changing vocal character. "
-    "Preserve natural texture, imperfections and expression. "
-    "Build rich professional piano, warm strings, bass and steady "
-    "rhythmic drums around the vocal, following its exact timing. "
-    "Keep the original singer clear, natural and dominant. "
-    "No additional voices or competing melodies. "
-    "Keep EVERY word, repetition, verse, chorus and final note. "
-    "Never shorten or truncate vocals. Optional intro and outro "
-    "must not replace singing. End after the COMPLETE final phrase. "
-    "VOCAL AUTHENTICITY OVERRIDES PRODUCTION."
+    "ABSOLUTE PRIORITY: The uploaded vocal AUDIO is the only "
+    "authority. Preserve the EXACT original singer's voice "
+    "identity, timbre, formants, accent, breaths, vibrato, "
+    "pitch, melody, phrasing and timing. Never re-sing, "
+    "regenerate, imitate or replace any vocal. Preserve EVERY "
+    "audible vowel, consonant, syllable, word ending and dialect "
+    "exactly as sung, including Hebrew, Yiddish and Hasidic "
+    "pronunciation. Never normalize prayer words or reconstruct "
+    "lyrics from text. Keep ALL words, repeats, verses, choruses, "
+    "pauses and the FULL final sustained vocal note in order. "
+    "Never shorten, skip or cut any sung section. Instrumental "
+    "outro starts ONLY AFTER the final vocal note. Gently reduce "
+    "hiss, hum and room noise without changing vocal texture. "
+    "Transparent EQ and light compression only. Arrange warm "
+    "piano, strings, bass and steady drums AROUND the original "
+    "vocal. No extra voices or competing melodies. Vocal "
+    "authenticity and complete ending override production."
 )
+
+
 
 
 DEFAULT_COVER_NEGATIVE_TAGS = (
-    "instrumental only, missing vocals, replacement singer, "
-    "AI vocals, re-sung vocals, synthetic voice, changed timbre, "
-    "altered formants, autotune, pitch correction, robotic voice, "
-    "changed accent, pronunciation or melody, missing lyrics, "
-    "skipped verses, choir, backing vocals, harmonies, doubled "
-    "vocals, extra singers, competing melodies, heavy drums, "
-    "distortion, metallic artifacts, aggressive denoising, "
-    "background hiss, hum, room noise, abrupt ending, "
-    "truncated vocals, cut-off words, early fade-out"
+    "replacement singer, AI vocals, re-singing, synthetic voice, "
+    "voice conversion, changed accent, normalized pronunciation, "
+    "changed vowels, consonants or syllables, corrected prayer "
+    "text, altered lyrics, missing words, skipped repeats, "
+    "skipped verses, missing final phrase, cut-off words, "
+    "truncated vocals, premature ending, early fade-out, "
+    "choir, backing vocals, harmonies, doubled vocals, "
+    "extra singers, autotune, pitch correction, formant shifting, "
+    "distortion, metallic artifacts, hiss, hum, room noise"
 )
+
 
 
 def _callback_url():
