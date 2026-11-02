@@ -506,28 +506,23 @@ async def analyze_song_endpoint(
 # CREATE SONG AUTO
 # =====================================
 
+
 @app.post("/create-song-auto")
-async def create_song_auto(
-    request: AutoSongRequest
-):
+async def create_song_auto(request: AutoSongRequest):
     try:
         analysis = await analyze_song(
             upload_url=request.upload_url
         )
 
+        title = request.title or analysis["title"]
         lyrics = analysis["lyrics"]
 
-        # OpenAI returns only title and lyrics.
-        # Suno owns all arrangement prompts.
-
-        result = await add_instrumental(
+        result = await generate_upload_cover(
             upload_url=request.upload_url,
-            title=(
-                request.title or analysis["title"]
-            ),
+            title=title,
+            style=DEFAULT_COVER_STYLE,
+            negative_tags=DEFAULT_COVER_NEGATIVE_TAGS,
             lyrics=lyrics,
-            tags=DEFAULT_TAGS,
-            negative_tags=DEFAULT_NEGATIVE_TAGS,
         )
 
         return {
@@ -553,3 +548,4 @@ async def create_song_auto(
             status_code=500,
             detail=str(e),
         )
+
