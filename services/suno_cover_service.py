@@ -39,7 +39,7 @@ DEFAULT_COVER_NEGATIVE_TAGS = (
     "truncated vocals, premature ending, early fade-out, "
     "choir, backing vocals, harmonies, doubled vocals, "
     "extra singers, autotune, pitch correction, formant shifting, "
-    "distortion, metallic artifacts, hiss, hum, room noise"
+    "distortion, metallic artifacts, hiss, hum"
 )
 
 
