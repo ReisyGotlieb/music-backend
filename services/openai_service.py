@@ -5,6 +5,7 @@ import base64
 import asyncio
 import tempfile
 import logging
+
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -15,120 +16,131 @@ logger = logging.getLogger(__name__)
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-audio")
+
 OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 
 MAX_AUDIO_BYTES = 20 * 1024 * 1024
 MAX_ATTEMPTS = 2
 
 
+# =====================================
+# GPT SYSTEM PROMPT
+# =====================================
+
 SYSTEM_PROMPT = """
-You are an expert audio-first transcription specialist for Hebrew,
-Yiddish, Hasidic, Ashkenazi, English and multilingual songs.
+You are an expert music transcription specialist for
+Hebrew, Yiddish, Hasidic and Ashkenazi songs.
 
-Listen carefully to the ENTIRE recording, from the first audible
-sung sound through the final sung sound.
+Listen to the COMPLETE uploaded audio.
 
-ABSOLUTE PRIORITY:
-Transcribe exactly what the singer ACTUALLY sings.
-The original audio is the ONLY authority.
+Your task is to prepare exactly four fields for Suno:
+title, lyrics, tags, negative_tags.
 
-PHONETIC FIDELITY:
-- Write ALL sung lyrics in LATIN LETTERS ONLY.
-- Transcribe actual sounds, not standard spelling.
-- Preserve every audible vowel, consonant, syllable,
-  diphthong, word ending and stressed syllable.
-- Preserve the singer's actual dialect and accent.
-- Accept Hasidic, Litvish, Yerushalmi, Vizhnitz,
-  Ger, Breslov, Sephardi, Yemenite, Yiddish,
-  mixed and individual pronunciations.
-- Never assume a dialect before listening.
-- Never normalize pronunciation to another dialect.
-- Never correct or modernize the singer's pronunciation.
-- Use KH for an audible guttural Hebrew Chet,
-  never English CH.
-- Choose Latin spelling that best reflects the audio.
+TRANSCRIPTION:
+- Identify every meaningful sung word.
+- Preserve every verse, chorus, line and repetition.
+- Preserve the singer's actual dialect.
+- Never convert Hasidic pronunciation into Litvish.
+- Correct obvious accidental word omissions only when
+  strongly supported by other occurrences and context.
+- For unclear Yiddish, use real Yiddish vocabulary and
+  grammar. Never invent nonsense words.
+- Never fabricate lyrics to fill unclear passages.
 
-RELIGIOUS AND LITURGICAL TEXT:
-- Recognizing a prayer, blessing, Psalm, biblical verse
-  or traditional song must NEVER determine pronunciation.
-- Never reconstruct phonetic spelling from Siddur,
-  Tanakh, Hebrew spelling or memorized lyrics.
-- Never replace an audible vowel or consonant with
-  the expected pronunciation of a familiar word.
-- Determine the audible sounds independently of
-  the underlying religious text.
-- The recording always overrides religious knowledge.
+WORDLESS SINGING AND HUMMING:
+- A recording may contain meaningful lyrics, wordless
+  singing, humming, or a mixture of these.
+- All these are valid musical performances.
+- If the singer sings syllables such as "na na",
+  "la la", "ma ma" or "du du", transcribe the
+  audible syllables as sung.
+- Do not invent meaningful words for wordless singing.
+- Do not replace audible singing with
+  [Instrumental Break] or [Instrumental Outro].
+- If the recording contains only closed-mouth humming
+  with no identifiable syllables, lyrics may be empty.
+- Empty lyrics for pure humming is a valid result,
+  not an error.
+- Never invent lyrics merely to fill the lyrics field.
+- The uploaded audio remains the musical reference.
 
-UNCLEAR WORD RECOGNITION:
-- Use audible evidence, linguistic context, authentic
-  vocabulary, grammar and repeated occurrences to
-  recognize unclear words when sufficiently supported.
-- This applies to Hebrew, Yiddish, English and all
-  other languages.
-- Context may identify an unclear word but must NEVER
-  overwrite clearly audible pronunciation.
-- Never invent nonsense words or missing lyrics.
-- Never insert words omitted by the singer.
-- Never silently correct grammar or pronunciation.
-- If genuinely unintelligible, write [Unclear].
+PRONUNCIATION:
+- Write lyrics in Latin letters.
+- Preserve the original vowels, consonants and accent.
+- Use KH for Hebrew guttural Chet, not English CH.
+- Example: prefer Tapukhei over Tapuchei when the
+  recording contains the Hebrew guttural sound.
+- Keep repeated words consistent with the dominant
+  pronunciation of the song.
+- Do not normalize authentic dialect differences.
 
-REPEATED WORDS:
-- Listen independently to every occurrence.
-- Preserve actual pronunciation differences.
-- Never normalize to a dominant or standard form.
-- Use other repetitions only to clarify unclear audio,
-  without overriding sounds that are clearly heard.
+STRUCTURE:
+- Identify verses, choruses and repeated sections
+  from the recording itself.
+- Preserve the complete order of the original song.
+- Use tags such as [Verse 1], [Chorus], [Bridge].
+- Use [Instrumental Break] only for genuinely
+  instrumental passages without audible singing.
+- Never replace sung words or sung syllables with music.
 
-COMPLETE TRANSCRIPTION:
-- Include EVERY sung word, syllable, line and phrase.
-- Include ALL repeated verses, choruses and phrases.
-- Never summarize, shorten or merge repetitions.
-- Preserve the exact original order.
-- Include the full beginning and ending.
-- Never invent additional lyrics or vocal sections.
-
-WORDLESS SINGING:
-- Transcribe audible syllables such as Na, La, Ma,
-  Du, Oy, Ay and Lai exactly as heard.
-- Preserve all repetitions.
-- Do not invent words for humming.
-- Pure closed-mouth humming without identifiable
-  syllables may have empty lyrics.
-- Mixed words and humming must both be represented.
-
-SONG STRUCTURE:
-- Use [Verse 1], [Verse 2], [Chorus], [Bridge],
-  [Verse 1 Repeat] or similar labels when musically
-  supported by the actual recording.
-- Use melody, phrasing and repetition to identify
-  sections, not the meaning of religious text.
-- Put each sung phrase on a separate line.
-- Use blank lines between sections.
-- Write the complete lyrics of every repeated section.
-- Do not invent instrumental introductions, transitions
-  or outros that are absent from the recording.
+ARRANGEMENT:
+- Decide automatically whether a tasteful instrumental
+  intro, transition or outro would improve the song.
+- Add only musically appropriate sections.
+- Never interrupt or replace an original vocal phrase.
+- Keep all original vocal entrances and repetitions.
+- Prefer no additional transition when uncertain.
+- For wordless singing and humming, arrange instruments
+  around the exact uploaded melody and timing.
 
 TITLE:
-- Return a short meaningful title.
-- Prefer a recognizable sung phrase.
-- If the song is in Hebrew, the title will be written in Hebrew script.
-- For wordless recordings use a neutral title.
+- Infer a short, meaningful title from the song.
+- Prefer Hebrew script for Hebrew or Yiddish songs.
+- For wordless recordings, use a short neutral title.
+- Do not invent a title unrelated to the recording.
 
-OUTPUT:
-Return ONLY valid JSON with exactly two string fields:
-{"title":"","lyrics":""}
+TAGS:
+- Professional instrumental arrangement.
+- Preserve the original singer's identity, timbre,
+  pronunciation, melody, phrasing and timing.
+- Use supportive piano, strings, bass and drums.
+- Keep the original singer dominant.
+- Follow the original vocal entrances.
+- For humming, preserve the hummed melody and
+  build accompaniment around it.
 
-No Markdown, explanations or extra fields.
-All sung lyrics must use Latin letters.
-Maximum lyrics length: 5000 characters.
-Never silently truncate the original transcription.
+NEGATIVE TAGS:
+- No replacement singer, changed lyrics, missing words,
+  skipped verses, choir, backing vocals, vocal doubling,
+  altered melody or cut-off ending.
+- No invented lyrics for wordless recordings.
 
-FINAL CHECK:
-Verify phonetic fidelity, actual dialect, unclear words,
-all repetitions, wordless syllables, full beginning
-and complete ending before returning the result.
+LIMITS:
+- tags: maximum 1000 characters.
+- negative_tags: maximum 500 characters.
+- lyrics: maximum 5000 characters.
+
+Return ONLY a valid JSON object:
+{
+  "title": "",
+  "lyrics": "",
+  "tags": "",
+  "negative_tags": ""
+}
+
+All four fields must be strings.
+The lyrics string may be empty for pure humming.
+
+Do not include Markdown.
+Do not include explanations outside JSON.
+If you cannot reliably identify the lyrics, do not
+invent a complete transcription.
 """
 
+
+# =====================================
+# AUDIO CONVERSION
+# =====================================
 
 async def convert_audio_to_wav(audio_bytes: bytes) -> bytes:
     """Convert browser audio formats to 24 kHz mono WAV."""
@@ -177,6 +189,7 @@ async def convert_audio_to_wav(audio_bytes: bytes) -> bytes:
                 "utf-8",
                 errors="replace",
             )[:500]
+
             raise ValueError(
                 f"Audio conversion failed: {details}"
             )
@@ -191,8 +204,12 @@ async def convert_audio_to_wav(audio_bytes: bytes) -> bytes:
         return wav_bytes
 
 
+# =====================================
+# GPT RESPONSE VALIDATION
+# =====================================
+
 def parse_song_response(result: dict) -> dict:
-    """Parse and validate transcription response."""
+    """Parse and validate the four required GPT fields."""
 
     choices = result.get("choices") or []
 
@@ -242,7 +259,12 @@ def parse_song_response(result: dict) -> dict:
             "OpenAI JSON must be an object"
         )
 
-    required_fields = ("title", "lyrics")
+    required_fields = (
+        "title",
+        "lyrics",
+        "tags",
+        "negative_tags",
+    )
 
     for field in required_fields:
         if not isinstance(song.get(field), str):
@@ -260,11 +282,25 @@ def parse_song_response(result: dict) -> dict:
             "Lyrics exceed 5000 characters"
         )
 
+    if len(song["tags"]) > 1000:
+        raise ValueError(
+            "Tags exceed 1000 characters"
+        )
+
+    if len(song["negative_tags"]) > 500:
+        raise ValueError(
+            "Negative tags exceed 500 characters"
+        )
+
     return {
         field: song[field]
         for field in required_fields
     }
 
+
+# =====================================
+# GPT AUDIO ANALYSIS
+# =====================================
 
 async def analyze_song(upload_url: str) -> dict:
 
@@ -329,13 +365,12 @@ async def analyze_song(upload_url: str) -> dict:
                         {
                             "type": "text",
                             "text": (
-                                "Transcribe this complete song recording "
-                                "and return exactly two JSON string fields: "
-                                "title and lyrics. Preserve the singer's "
-                                "actual pronunciation and all repetitions. "
-                                "The audio may contain words, wordless "
-                                "syllables, humming or a mixture. "
+                                "Analyze this complete song recording "
+                                "and return the Suno-ready JSON. "
+                                "The recording may contain real words, "
+                                "wordless syllables, humming, or a mix. "
                                 "Do not invent lyrics for humming. "
+                                "Return all four JSON string fields. "
                                 "Empty lyrics are valid for pure humming."
                             ),
                         },
@@ -371,6 +406,12 @@ async def analyze_song(upload_url: str) -> dict:
                 api_response.raise_for_status()
 
                 result = api_response.json()
+
+                logger.info(
+                    "OpenAI model: %s; usage: %s",
+                    result.get("model"),
+                    result.get("usage", {}),
+                )
 
                 return parse_song_response(result)
 
