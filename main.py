@@ -169,9 +169,15 @@ class AnalyzeSongRequest(BaseModel):
     )
 
 
+
 class AutoSongRequest(BaseModel):
     upload_url: str
     title: str | None = None
+    lyrics: str | None = Field(
+        default=None,
+        max_length=3000,
+        description="Optional user-provided lyrics",
+    )
 
 
 # =====================================
@@ -507,15 +513,35 @@ async def analyze_song_endpoint(
 # =====================================
 
 
+
 @app.post("/create-song-auto")
 async def create_song_auto(request: AutoSongRequest):
     try:
-        analysis = await analyze_song(
-            upload_url=request.upload_url
-        )
+        user_lyrics = (request.lyrics or "").strip()
 
-        title = request.title or analysis["title"]
-        lyrics = analysis["lyrics"]
+        if user_lyrics:
+            # Use user lyrics, skip OpenAI transcription
+            lyrics = user_lyrics
+            title = (request.title or "").strip() or "My Song"
+
+            analysis = {
+                "title": title,
+                "lyrics": lyrics,
+                "tags": "",
+                "negative_tags": "",
+            }
+
+        else:
+            # Existing automatic OpenAI transcription
+            analysis = await analyze_song(
+                upload_url=request.upload_url
+            )
+
+            title = (
+                (request.title or "").strip()
+                or analysis["title"]
+            )
+            lyrics = analysis["lyrics"]
 
         result = await generate_upload_cover(
             upload_url=request.upload_url,
