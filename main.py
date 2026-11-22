@@ -32,6 +32,7 @@ from services.suno_cover_service import (
     get_cover_generation_details,
     DEFAULT_COVER_STYLE,
     DEFAULT_COVER_NEGATIVE_TAGS,
+    resolve_cover_style,
 )
 
 # from services.voice_service import router as voice_router
