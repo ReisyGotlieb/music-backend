@@ -124,6 +124,7 @@ async def generate_upload_cover(
     lyrics: str = "",
     persona_id: str | None = None,
     persona_model: str = "voice_persona",
+    style_weight: float = 0.0,
 ):
     if not SUNO_API_KEY:
         raise RuntimeError("SUNO_API_KEY is not configured")
