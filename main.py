@@ -543,9 +543,9 @@ async def create_song_auto(request: AutoSongRequest):
             )
             lyrics = analysis["lyrics"]
 
-            selected_style = resolve_cover_style(
-                request.music_style
-        )
+          selected_style = resolve_cover_style(
+            request.music_style
+        )          
 
         style_weight = (
             0.0 if request.music_style == "default" else 0.35
