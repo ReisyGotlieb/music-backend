@@ -69,6 +69,27 @@ MUSIC_STYLES = {
         "Modern upbeat pop production, polished drums, "
         "bass, keyboards and bright rhythmic arrangement"
     ),
+    "mizrahi": (
+        "Mizrahi Jewish pop, Middle Eastern rhythms, "
+        "oud, darbuka, violin and warm keyboards"
+    ),
+    "playful": (
+        "Playful upbeat music, bouncy rhythm, "
+        "pizzicato strings, bright piano and fun percussion"
+    ),
+    "dramatic": (
+        "Dramatic cinematic music, powerful strings, "
+        "deep drums, dynamic orchestral build-ups"
+    ),
+    "kindergarten": (
+        "Cheerful children's activity music, simple catchy "
+        "rhythm, ukulele, xylophone and playful percussion"
+    ),
+    "wild": (
+        "Wild high-energy dance music, fast driving drums, "
+        "punchy bass, brass hits and exciting rhythmic breaks"
+    ),
+
 }
 
 CUSTOM_COVER_STYLE = (
