@@ -43,6 +43,47 @@ DEFAULT_COVER_NEGATIVE_TAGS = (
 )
 
 
+MUSIC_STYLES = {
+    "default": "",
+    "hasidic_upbeat": (
+        "Upbeat Hasidic Jewish music, lively dance rhythm, "
+        "energetic drums, bass, piano, strings and clarinet"
+    ),
+    "kumzitz": (
+        "Warm acoustic kumzitz, gentle guitar, soft piano, "
+        "intimate emotional arrangement"
+    ),
+    "wedding": (
+        "Joyful Hasidic wedding music, festive brass, "
+        "strings, energetic drums and dance rhythm"
+    ),
+    "emotional": (
+        "Emotional Jewish ballad, expressive piano, "
+        "warm strings, gentle percussion"
+    ),
+    "orchestral": (
+        "Rich cinematic orchestral arrangement, "
+        "lush strings, piano, woodwinds and percussion"
+    ),
+    "pop": (
+        "Modern upbeat pop production, polished drums, "
+        "bass, keyboards and bright rhythmic arrangement"
+    ),
+}
+
+
+def resolve_cover_style(music_style: str) -> str:
+    if music_style not in MUSIC_STYLES:
+        raise ValueError("Unsupported music style")
+
+    selected = MUSIC_STYLES[music_style]
+
+    if not selected:
+        return DEFAULT_COVER_STYLE
+
+    return DEFAULT_COVER_STYLE + " Musical arrangement: " + selected
+
+
 
 def _callback_url():
     return (
