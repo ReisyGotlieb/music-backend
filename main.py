@@ -169,8 +169,6 @@ class AnalyzeSongRequest(BaseModel):
         description="Public HTTPS URL of an audio recording",
     )
 
-
-
 class AutoSongRequest(BaseModel):
     upload_url: str
     title: str | None = None
@@ -179,6 +177,7 @@ class AutoSongRequest(BaseModel):
         max_length=3000,
         description="Optional user-provided lyrics",
     )
+    music_style: str = "default"
 
 
 # =====================================
@@ -544,12 +543,21 @@ async def create_song_auto(request: AutoSongRequest):
             )
             lyrics = analysis["lyrics"]
 
+               selected_style = resolve_cover_style(
+            request.music_style
+        )
+
+        style_weight = (
+            0.0 if request.music_style == "default" else 0.35
+        )
+
         result = await generate_upload_cover(
             upload_url=request.upload_url,
             title=title,
-            style=DEFAULT_COVER_STYLE,
+            style=selected_style,
             negative_tags=DEFAULT_COVER_NEGATIVE_TAGS,
             lyrics=lyrics,
+            style_weight=style_weight,
         )
 
         return {
