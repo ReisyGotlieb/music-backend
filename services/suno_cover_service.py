@@ -71,6 +71,18 @@ MUSIC_STYLES = {
     ),
 }
 
+CUSTOM_COVER_STYLE = (
+    "ABSOLUTE PRIORITY: Preserve the uploaded ORIGINAL vocal audio exactly: "
+    "singer identity, timbre, accent, Hebrew/Yiddish/Hasidic pronunciation, "
+    "pitch, melody, rhythm, phrasing, timing, breaths and vibrato. "
+    "Never replace, re-sing, regenerate, tune, shift or stretch the voice. "
+    "Keep every word, syllable, repeat, pause, verse and the complete final "
+    "sustained note. Do not shorten or fade the vocal early. Instrumental "
+    "outro begins only after the last vocal note. Reduce noise gently; "
+    "apply only transparent EQ and light compression. Add accompaniment "
+    "AROUND the original voice, without extra singers, harmonies or "
+    "competing melodies. The original vocal always takes priority."
+)
 
 def resolve_cover_style(music_style: str) -> str:
     if music_style not in MUSIC_STYLES:
@@ -81,9 +93,7 @@ def resolve_cover_style(music_style: str) -> str:
     if not selected:
         return DEFAULT_COVER_STYLE
 
-    return DEFAULT_COVER_STYLE + " Musical arrangement: " + selected
-
-
+    return CUSTOM_COVER_STYLE + " Musical arrangement: " + selected
 
 def _callback_url():
     return (
